@@ -1,17 +1,9 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleDestroy, OnModuleInit
-{
+export class PrismaService extends PrismaClient implements OnModuleDestroy, OnModuleInit {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
@@ -20,10 +12,7 @@ export class PrismaService
     });
     super({
       adapter,
-      log:
-        process.env.NODE_ENV === 'development'
-          ? ['query', 'info', 'warn']
-          : ['error'],
+      log: process.env.NODE_ENV === 'development' ? ['query', 'info', 'warn'] : ['error'],
     });
   }
 
