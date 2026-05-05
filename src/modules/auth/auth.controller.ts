@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -40,5 +40,18 @@ export class AuthController {
   })
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
     return await this.authService.register(registerDto);
+  }
+
+  @Get('confirm')
+  @ApiOperation({
+    summary: 'Confirm user email',
+    description: 'This endpoint verifies a user email by confirmation token',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Email verified successfully',
+  })
+  async confirmEmail(@Query('token') token: string): Promise<{ message: string }> {
+    return await this.authService.confirmEmail(token);
   }
 }

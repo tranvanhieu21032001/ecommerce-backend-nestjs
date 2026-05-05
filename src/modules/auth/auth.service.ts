@@ -1,12 +1,18 @@
-import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import * as argon2 from 'argon2';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { MailsService } from 'src/common/mails/mails.service';
 
 @Injectable()
 export class AuthService {
@@ -14,6 +20,7 @@ export class AuthService {
     private prismaService: PrismaService,
     private jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailsService: MailsService,
   ) {}
 
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
@@ -36,30 +43,53 @@ export class AuthService {
 
     try {
       const hashedPassword = await argon2.hash(password);
-      const user = await this.prismaService.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          firstName,
-          lastName,
-          phoneNumber,
-          birthday: birthday ? new Date(birthday) : undefined,
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          phoneNumber: true,
-          birthday: true,
-          role: true,
-        },
+      const verificationToken = this.generateVerificationToken();
+      const verificationTokenHash = this.hashVerificationToken(verificationToken);
+      const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      const result = await this.prismaService.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            firstName,
+            lastName,
+            phoneNumber,
+            birthday: birthday ? new Date(birthday) : undefined,
+          },
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            birthday: true,
+            role: true,
+          },
+        });
+        const tokens = await this.generateTokens(user.id, user.email);
+        await this.storeRefreshToken(tx, user.id, tokens.refreshToken);
+        await tx.emailVerificationToken.create({
+          data: {
+            userId: user.id,
+            tokenHash: verificationTokenHash,
+            expiresAt: verificationExpiresAt,
+          },
+        });
+
+        return { user, tokens };
       });
-      const tokens = await this.generateTokens(user.id, user.email);
-      await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+      await this.mailsService.sendConfirmationEmail(
+        result.user.email,
+        result.user.firstName ?? result.user.lastName ?? result.user.email,
+        verificationToken,
+      );
+
       return {
-        user,
-        ...tokens,
+        message: 'Registration successful! Please check your email to verify your account!',
+        user: result.user,
+        ...result.tokens,
       };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -105,15 +135,62 @@ export class AuthService {
   }
 
   async updateRefreshToken(userId: string, refreshToken: string): Promise<void> {
+    await this.storeRefreshToken(this.prismaService, userId, refreshToken);
+  }
+
+  async confirmEmail(token: string): Promise<{ message: string }> {
+    const tokenHash = this.hashVerificationToken(token);
+    const now = new Date();
+
+    const verificationToken = await this.prismaService.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!verificationToken || verificationToken.consumedAt || verificationToken.expiresAt < now) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
+    await this.prismaService.$transaction([
+      this.prismaService.user.update({
+        where: { id: verificationToken.userId },
+        data: {
+          emailVerifiedAt: now,
+        },
+      }),
+      this.prismaService.emailVerificationToken.update({
+        where: { id: verificationToken.id },
+        data: {
+          consumedAt: now,
+        },
+      }),
+    ]);
+
+    return { message: 'Email verified successfully' };
+  }
+
+  private async storeRefreshToken(
+    prisma: PrismaService | Prisma.TransactionClient,
+    userId: string,
+    refreshToken: string,
+  ): Promise<void> {
     const hashedRefreshToken = await argon2.hash(refreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    await this.prismaService.userSession.create({
+    await prisma.userSession.create({
       data: {
         userId,
         refreshTokenHash: hashedRefreshToken,
         expiresAt,
       },
     });
+  }
+
+  private generateVerificationToken(): string {
+    return randomBytes(32).toString('hex');
+  }
+
+  private hashVerificationToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 }

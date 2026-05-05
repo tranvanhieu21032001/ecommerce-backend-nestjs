@@ -50,14 +50,16 @@ model User {
   firstName   String?
   lastName    String?
   birthday    DateTime?
+  emailVerifiedAt DateTime?
   role        Role       @default(USER)
   status      UserStatus @default(ACTIVE)
 
   // Relations
-  sessions UserSession[]
-  orders   Order[]
-  carts    Cart[]
-  payments Payment[]
+  sessions                UserSession[]
+  emailVerificationTokens EmailVerificationToken[]
+  orders                  Order[]
+  carts                   Cart[]
+  payments                Payment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -67,6 +69,23 @@ model User {
   @@index([phoneNumber])
   @@index([status])
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([consumedAt])
+  @@map("email_verification_tokens")
 }
 
 model UserSession {
