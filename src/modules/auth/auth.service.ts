@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -13,6 +14,8 @@ import { createHash, randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { MailsService } from 'src/common/mails/mails.service';
+import { LoginDto } from './dto/login.dto';
+import { LogoutDto } from './dto/logout.dto';
 
 @Injectable()
 export class AuthService {
@@ -87,6 +90,7 @@ export class AuthService {
       );
 
       return {
+        status: true,
         message: 'Registration successful! Please check your email to verify your account!',
         user: result.user,
         ...result.tokens,
@@ -110,6 +114,83 @@ export class AuthService {
       console.error('Error during user registration:', error);
       throw new InternalServerErrorException('An error occurred during registration');
     }
+  }
+
+  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
+    const { email, password } = loginDto;
+    const user = await this.prismaService.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const isPasswordValid = await argon2.verify(user.password, password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      birthday: user.birthday,
+      phoneNumber: user.phoneNumber,
+      role: user.role,
+    };
+
+    return {
+      status: true,
+      message: 'Login successful',
+      user: safeUser,
+      ...tokens,
+    };
+  }
+
+  async logout(logoutDto: LogoutDto): Promise<{ status: boolean; message: string }> {
+    const { refreshToken } = logoutDto;
+    let payload: { sub: string };
+
+    try {
+      payload = await this.jwtService.verifyAsync<{ sub: string }>(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const activeSessions = await this.prismaService.userSession.findMany({
+      where: {
+        userId: payload.sub,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        refreshTokenHash: true,
+      },
+    });
+
+    for (const session of activeSessions) {
+      const isMatched = await argon2.verify(session.refreshTokenHash, refreshToken);
+      if (isMatched) {
+        await this.prismaService.userSession.update({
+          where: { id: session.id },
+          data: { revokedAt: new Date() },
+        });
+
+        return {
+          status: true,
+          message: 'Logout successful',
+        };
+      }
+    }
+
+    throw new UnauthorizedException('Session not found or already revoked');
   }
 
   async generateTokens(
@@ -138,7 +219,7 @@ export class AuthService {
     await this.storeRefreshToken(this.prismaService, userId, refreshToken);
   }
 
-  async confirmEmail(token: string): Promise<{ message: string }> {
+  async confirmEmail(token: string): Promise<{ status: boolean; message: string }> {
     const tokenHash = this.hashVerificationToken(token);
     const now = new Date();
 
@@ -166,7 +247,7 @@ export class AuthService {
       }),
     ]);
 
-    return { message: 'Email verified successfully' };
+    return { status: true, message: 'Email verified successfully' };
   }
 
   private async storeRefreshToken(

@@ -1,8 +1,10 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { LoginDto } from './dto/login.dto';
+import { LogoutDto } from './dto/logout.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -42,6 +44,49 @@ export class AuthController {
     return await this.authService.register(registerDto);
   }
 
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Login user',
+    description: 'Logs in the user and returns access and refresh tokens',
+  })
+  @ApiBody({
+    type: LoginDto,
+  })
+  @ApiResponse({ status: 200, description: 'User logged in successfully', type: AuthResponseDto })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid email or password',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too Many Requests. Rate limit exceeded',
+  })
+  async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
+    return await this.authService.login(loginDto);
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Logout user',
+    description: 'Logs out the user by revoking the current refresh token session',
+  })
+  @ApiBody({
+    type: LogoutDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User logged out successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid refresh token or session not found',
+  })
+  async logout(@Body() logoutDto: LogoutDto): Promise<{ status: boolean; message: string }> {
+    return await this.authService.logout(logoutDto);
+  }
+
   @Get('confirm')
   @ApiOperation({
     summary: 'Confirm user email',
@@ -51,7 +96,7 @@ export class AuthController {
     status: 200,
     description: 'Email verified successfully',
   })
-  async confirmEmail(@Query('token') token: string): Promise<{ message: string }> {
+  async confirmEmail(@Query('token') token: string): Promise<{ status: boolean; message: string }> {
     return await this.authService.confirmEmail(token);
   }
 }
