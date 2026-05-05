@@ -1,10 +1,21 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { JwtRefreshAuthGuard } from 'src/common/guards/jwt-refresh-auth.guard';
+import { getUser } from 'src/common/decorators/get-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -85,6 +96,34 @@ export class AuthController {
   })
   async logout(@Body() logoutDto: LogoutDto): Promise<{ status: boolean; message: string }> {
     return await this.authService.logout(logoutDto);
+  }
+
+  @Post('refresh')
+  @UseGuards(JwtRefreshAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Refresh access token',
+    description: 'Validates refresh token and issues a new access/refresh token pair',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed successfully',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid refresh token',
+  })
+  async refresh(
+    @getUser()
+    user: {
+      id: string;
+      email: string;
+      role: string;
+      refreshToken: string;
+    },
+  ): Promise<AuthResponseDto> {
+    return await this.authService.refreshTokens(user);
   }
 
   @Get('confirm')

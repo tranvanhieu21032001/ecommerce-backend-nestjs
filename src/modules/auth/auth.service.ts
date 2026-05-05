@@ -17,6 +17,12 @@ import { MailsService } from 'src/common/mails/mails.service';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 
+type RefreshAuthUser = {
+  id: string;
+  email: string;
+  refreshToken: string;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -191,6 +197,68 @@ export class AuthService {
     }
 
     throw new UnauthorizedException('Session not found or already revoked');
+  }
+
+  async refreshTokens(refreshUser: RefreshAuthUser): Promise<AuthResponseDto> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: refreshUser.id },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        birthday: true,
+        phoneNumber: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const activeSessions = await this.prismaService.userSession.findMany({
+      where: {
+        userId: refreshUser.id,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        refreshTokenHash: true,
+      },
+    });
+
+    let matchedSessionId: string | null = null;
+    for (const session of activeSessions) {
+      if (await argon2.verify(session.refreshTokenHash, refreshUser.refreshToken)) {
+        matchedSessionId = session.id;
+        break;
+      }
+    }
+
+    if (!matchedSessionId) {
+      throw new UnauthorizedException('Session not found or already revoked');
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+
+    const sessionId = matchedSessionId;
+    await this.prismaService.$transaction(async (tx) => {
+      await tx.userSession.update({
+        where: { id: sessionId },
+        data: { revokedAt: new Date() },
+      });
+
+      await this.storeRefreshToken(tx, user.id, tokens.refreshToken);
+    });
+
+    return {
+      status: true,
+      message: 'Token refreshed successfully',
+      user,
+      ...tokens,
+    };
   }
 
   async generateTokens(

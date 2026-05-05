@@ -10,6 +10,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
 import { MailsModule } from './common/mails/mails.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { MailsModule } from './common/mails/mails.module';
     RedisModule,
     AuthModule,
     MailsModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [
