@@ -15,7 +15,7 @@ import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { JwtRefreshAuthGuard } from 'src/common/guards/jwt-refresh-auth.guard';
-import { getUser } from 'src/common/decorators/get-user.decorator';
+import { GetUser } from 'src/common/decorators/get-user.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -115,7 +115,7 @@ export class AuthController {
     description: 'Unauthorized. Invalid refresh token',
   })
   async refresh(
-    @getUser()
+    @GetUser()
     user: {
       id: string;
       email: string;

@@ -43,16 +43,16 @@ enum PaymentMethod {
 }
 
 model User {
-  id          String     @id @default(uuid())
-  email       String     @unique
-  phoneNumber String?    @unique
-  password    String
-  firstName   String?
-  lastName    String?
-  birthday    DateTime?
+  id              String     @id @default(uuid())
+  email           String     @unique
+  phoneNumber     String?    @unique
+  password        String
+  firstName       String?
+  lastName        String?
+  birthday        DateTime?
   emailVerifiedAt DateTime?
-  role        Role       @default(USER)
-  status      UserStatus @default(ACTIVE)
+  role            Role       @default(USER)
+  status          UserStatus @default(ACTIVE)
 
   // Relations
   sessions                UserSession[]
@@ -72,10 +72,10 @@ model User {
 }
 
 model EmailVerificationToken {
-  id         String   @id @default(uuid())
+  id         String    @id @default(uuid())
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
   expiresAt  DateTime
   consumedAt DateTime?
 

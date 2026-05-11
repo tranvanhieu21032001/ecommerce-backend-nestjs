@@ -2,8 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
 export class UserResponseDto {
-  status: boolean;
-  message: string;
   @ApiProperty({
     description: 'User Id',
     example: '123e4567-e89b-12d3-a456-426614174000',
