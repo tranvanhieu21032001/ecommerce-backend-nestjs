@@ -11,6 +11,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './modules/auth/auth.module';
 import { MailsModule } from './common/mails/mails.module';
 import { UsersModule } from './modules/users/users.module';
+import { CategoriesModule } from './modules/categories/categories.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { UsersModule } from './modules/users/users.module';
     AuthModule,
     MailsModule,
     UsersModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [
