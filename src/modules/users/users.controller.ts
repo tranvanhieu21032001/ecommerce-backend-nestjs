@@ -19,7 +19,7 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
 @ApiTags('users')
-@ApiBearerAuth('JWT-auth')
+@ApiBearerAuth('JWT-AUTH')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {

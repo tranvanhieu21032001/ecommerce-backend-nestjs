@@ -24,7 +24,7 @@ async function bootstrap() {
   const configSwagger = new DocumentBuilder()
     .setTitle('E-commerce API')
     .setVersion('1.0')
-    .setDescription('API documentation for the E-commerce application')
+    .setDescription('API documentation for the The Holemerce application')
     .addTag('auth', 'Authentication endpoints')
     .addBearerAuth(
       {
