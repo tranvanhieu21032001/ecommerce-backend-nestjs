@@ -6,13 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
-import { Category, Prisma, Product } from '@prisma/client';
+import { Brand, Category, Prisma, Product } from '@prisma/client';
 import { ProductResponseDto } from './dto/product-response.dto';
 import { QueryProductDto } from './dto/query-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 type ProductWithCategoryAndTags = Product & {
   category: Category;
+  brand: Brand | null;
   productTags?: Array<{
     tag: {
       id: string;
@@ -29,11 +30,22 @@ export class ProductsService {
   // Create product
   async create(createProductDto: CreateProductDto): Promise<ProductResponseDto> {
     const tagIds = this.uniqueTagIds(createProductDto.tagIds);
-    const category = await this.prisma.category.findUnique({
-      where: { id: createProductDto.categoryId },
-    });
+    const [category, brand] = await Promise.all([
+      this.prisma.category.findUnique({
+        where: { id: createProductDto.categoryId },
+      }),
+      createProductDto.brandId
+        ? this.prisma.brand.findUnique({
+            where: { id: createProductDto.brandId },
+          })
+        : Promise.resolve(null),
+    ]);
+
     if (!category) {
       throw new NotFoundException('Category not found');
+    }
+    if (createProductDto.brandId && !brand) {
+      throw new NotFoundException('Brand not found');
     }
 
     const existingSku = await this.prisma.product.findUnique({
@@ -57,6 +69,7 @@ export class ProductsService {
           sku: createProductDto.sku,
           imageUrl: createProductDto.imageUrl,
           categoryId: createProductDto.categoryId,
+          brandId: createProductDto.brandId,
           isActive: createProductDto.isActive,
         },
       });
@@ -74,6 +87,7 @@ export class ProductsService {
         where: { id: createdProduct.id },
         include: {
           category: true,
+          brand: true,
           productTags: {
             include: {
               tag: true,
@@ -102,12 +116,16 @@ export class ProductsService {
       totalPages: number;
     };
   }> {
-    const { categoryId, tagId, isActive, search, page = 1, limit = 10 } = queryDto;
+    const { categoryId, brandId, tagId, isActive, search, page = 1, limit = 10 } = queryDto;
 
     const where: Prisma.ProductWhereInput = {};
 
     if (categoryId) {
       where.categoryId = categoryId;
+    }
+
+    if (brandId) {
+      where.brandId = brandId;
     }
 
     if (isActive !== undefined) {
@@ -136,6 +154,7 @@ export class ProductsService {
       orderBy: { createdAt: 'desc' },
       include: {
         category: true,
+        brand: true,
         productTags: {
           include: {
             tag: true,
@@ -161,6 +180,7 @@ export class ProductsService {
       where: { id },
       include: {
         category: true,
+        brand: true,
         productTags: {
           include: {
             tag: true,
@@ -207,9 +227,19 @@ export class ProductsService {
       }
     }
 
-    const tagIds = updateProductDto.tagIds
-      ? this.uniqueTagIds(updateProductDto.tagIds)
-      : undefined;
+    if (
+      updateProductDto.brandId !== undefined &&
+      updateProductDto.brandId !== existingProduct.brandId
+    ) {
+      const brand = await this.prisma.brand.findUnique({
+        where: { id: updateProductDto.brandId },
+      });
+      if (!brand) {
+        throw new NotFoundException('Brand not found');
+      }
+    }
+
+    const tagIds = updateProductDto.tagIds ? this.uniqueTagIds(updateProductDto.tagIds) : undefined;
     if (tagIds) {
       await this.ensureTagsExist(tagIds);
     }
@@ -227,6 +257,7 @@ export class ProductsService {
     if (updateProductDto.imageUrl !== undefined) updateData.imageUrl = updateProductDto.imageUrl;
     if (updateProductDto.categoryId !== undefined)
       updateData.categoryId = updateProductDto.categoryId;
+    if (updateProductDto.brandId !== undefined) updateData.brandId = updateProductDto.brandId;
     if (updateProductDto.isActive !== undefined) updateData.isActive = updateProductDto.isActive;
 
     const updatedProduct = await this.prisma.$transaction(async (tx) => {
@@ -254,6 +285,7 @@ export class ProductsService {
         where: { id },
         include: {
           category: true,
+          brand: true,
           productTags: {
             include: {
               tag: true,
@@ -326,6 +358,7 @@ export class ProductsService {
         where: { id },
         include: {
           category: true,
+          brand: true,
           productTags: {
             include: {
               tag: true,
@@ -379,6 +412,14 @@ export class ProductsService {
       ...product,
       price: Number(product.price),
       category: product.category.name,
+      brand: product.brand
+        ? {
+            id: product.brand.id,
+            name: product.brand.name,
+            slug: product.brand.slug,
+            logoUrl: product.brand.logoUrl,
+          }
+        : null,
       tags: product.productTags?.map((productTag) => ({
         id: productTag.tag.id,
         name: productTag.tag.name,
@@ -392,9 +433,7 @@ export class ProductsService {
       return [];
     }
 
-    return [...new Set(tagIds.map((tagId) => tagId.trim()))].filter(
-      (tagId) => tagId.length > 0,
-    );
+    return [...new Set(tagIds.map((tagId) => tagId.trim()))].filter((tagId) => tagId.length > 0);
   }
 
   private async ensureTagsExist(tagIds: string[]): Promise<void> {

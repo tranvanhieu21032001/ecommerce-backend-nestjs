@@ -1,8 +1,4 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Tag } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { generateSlug } from 'src/common/utils/slug.util';
@@ -196,7 +192,10 @@ export class TagsService {
     return { message: 'Tag deleted successfully' };
   }
 
-  private formatTag(tag: Tag & { _count?: { productTags: number } }, productCount: number): TagResponseDto {
+  private formatTag(
+    tag: Tag & { _count?: { productTags: number } },
+    productCount: number,
+  ): TagResponseDto {
     return {
       id: tag.id,
       name: tag.name,

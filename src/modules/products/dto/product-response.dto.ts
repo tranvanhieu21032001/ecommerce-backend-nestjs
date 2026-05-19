@@ -20,6 +20,33 @@ class ProductTagResponseDto {
   slug: string;
 }
 
+class ProductBrandResponseDto {
+  @ApiProperty({
+    description: 'Brand ID',
+    example: 'brand-id-1',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Brand name',
+    example: 'Apple',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'Brand slug',
+    example: 'apple',
+  })
+  slug: string;
+
+  @ApiProperty({
+    description: 'Brand logo URL',
+    example: 'https://example.com/images/apple-logo.png',
+    nullable: true,
+  })
+  logoUrl: string | null;
+}
+
 export class ProductResponseDto {
   @ApiProperty({
     description: 'Product ID',
@@ -69,6 +96,13 @@ export class ProductResponseDto {
     example: 'Electronics',
   })
   category: string | null;
+
+  @ApiProperty({
+    description: 'Product brand',
+    type: ProductBrandResponseDto,
+    nullable: true,
+  })
+  brand: ProductBrandResponseDto | null;
 
   @ApiProperty({
     description: 'Product tags',

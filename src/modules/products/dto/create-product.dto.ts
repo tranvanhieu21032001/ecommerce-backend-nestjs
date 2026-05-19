@@ -81,6 +81,15 @@ export class CreateProductDto {
   categoryId: string;
 
   @ApiProperty({
+    description: 'Product brand ID',
+    example: '550e8400-e29b-41d4-a716-446655440002',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  brandId?: string;
+
+  @ApiProperty({
     description: 'List of tag IDs assigned to the product',
     example: ['tag-id-1', 'tag-id-2'],
     required: false,

@@ -54,13 +54,11 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refres
 
   async validate(req: Request, payload: RefreshTokenPayload) {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Refresh token not provided');
-    }
+    const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : null;
+    const refreshToken = extractCookieToken(req, 'the-hole.refresh_token') ?? bearerToken;
 
-    const refreshToken = authHeader.slice(7).trim();
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token is empty after extraction');
+      throw new UnauthorizedException('Refresh token not provided');
     }
 
     const user = await this.prismaService.user.findUnique({

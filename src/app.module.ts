@@ -14,6 +14,8 @@ import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ProductsModule } from './modules/products/products.module';
 import { TagsModule } from './modules/tags/tags.module';
+import { BrandsModule } from './modules/brands/brands.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -28,8 +30,8 @@ import { TagsModule } from './modules/tags/tags.module';
         throttlers: [
           {
             name: 'short',
-            ttl: 5000,
-            limit: 3,
+            ttl: 1000,
+            limit: 5,
           },
           {
             name: 'medium',
@@ -53,6 +55,8 @@ import { TagsModule } from './modules/tags/tags.module';
     CategoriesModule,
     ProductsModule,
     TagsModule,
+    BrandsModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [
