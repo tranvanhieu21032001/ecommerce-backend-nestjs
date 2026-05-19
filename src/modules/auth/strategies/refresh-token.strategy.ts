@@ -11,6 +11,25 @@ type RefreshTokenPayload = {
   email: string;
 };
 
+function extractCookieToken(req: Request | undefined, name: string) {
+  const cookieHeader = req?.headers?.cookie;
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookie = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  const value = cookie.slice(name.length + 1);
+  return value ? decodeURIComponent(value) : null;
+}
+
 @Injectable()
 export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor(
@@ -23,7 +42,10 @@ export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refres
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (req: Request) => extractCookieToken(req, 'the-hole.refresh_token'),
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: refreshSecret,
       passReqToCallback: true,

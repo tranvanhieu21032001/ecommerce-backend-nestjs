@@ -143,6 +143,7 @@ model Product {
   // Relations
   orderItems OrderItem[]
   cartItems  CartItem[]
+  productTags ProductTag[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -153,6 +154,41 @@ model Product {
   @@index([categoryId])
   @@index([isActive])
   @@map("products")
+}
+
+model Tag {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  slug        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  productTags ProductTag[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([slug])
+  @@index([isActive])
+  @@map("tags")
+}
+
+model ProductTag {
+  id        String @id @default(uuid())
+  productId String
+  tagId     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, tagId])
+  @@index([productId])
+  @@index([tagId])
+  @@map("product_tags")
 }
 
 model Cart {

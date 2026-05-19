@@ -11,12 +11,24 @@ import { ProductResponseDto } from './dto/product-response.dto';
 import { QueryProductDto } from './dto/query-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
+type ProductWithCategoryAndTags = Product & {
+  category: Category;
+  productTags?: Array<{
+    tag: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>;
+};
+
 @Injectable()
 export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
   // Create product
   async create(createProductDto: CreateProductDto): Promise<ProductResponseDto> {
+    const tagIds = this.uniqueTagIds(createProductDto.tagIds);
     const category = await this.prisma.category.findUnique({
       where: { id: createProductDto.categoryId },
     });
@@ -31,14 +43,50 @@ export class ProductsService {
       throw new ConflictException(`Product with SKU ${createProductDto.sku} already exist`);
     }
 
-    const product = await this.prisma.product.create({
-      data: {
-        ...createProductDto,
-        price: new Prisma.Decimal(createProductDto.price),
-      },
-      include: {
-        category: true,
-      },
+    if (tagIds.length > 0) {
+      await this.ensureTagsExist(tagIds);
+    }
+
+    const product = await this.prisma.$transaction(async (tx) => {
+      const createdProduct = await tx.product.create({
+        data: {
+          name: createProductDto.name,
+          description: createProductDto.description,
+          price: new Prisma.Decimal(createProductDto.price),
+          stock: createProductDto.stock,
+          sku: createProductDto.sku,
+          imageUrl: createProductDto.imageUrl,
+          categoryId: createProductDto.categoryId,
+          isActive: createProductDto.isActive,
+        },
+      });
+
+      if (tagIds.length > 0) {
+        await tx.productTag.createMany({
+          data: tagIds.map((tagId) => ({
+            productId: createdProduct.id,
+            tagId,
+          })),
+        });
+      }
+
+      const productWithRelations = await tx.product.findUnique({
+        where: { id: createdProduct.id },
+        include: {
+          category: true,
+          productTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
+
+      if (!productWithRelations) {
+        throw new NotFoundException('Product not found');
+      }
+
+      return productWithRelations;
     });
 
     return this.formatProduct(product);
@@ -54,7 +102,7 @@ export class ProductsService {
       totalPages: number;
     };
   }> {
-    const { categoryId, isActive, search, page = 1, limit = 10 } = queryDto;
+    const { categoryId, tagId, isActive, search, page = 1, limit = 10 } = queryDto;
 
     const where: Prisma.ProductWhereInput = {};
 
@@ -64,6 +112,12 @@ export class ProductsService {
 
     if (isActive !== undefined) {
       where.isActive = isActive;
+    }
+
+    if (tagId) {
+      where.productTags = {
+        some: { tagId },
+      };
     }
 
     if (search) {
@@ -82,6 +136,11 @@ export class ProductsService {
       orderBy: { createdAt: 'desc' },
       include: {
         category: true,
+        productTags: {
+          include: {
+            tag: true,
+          },
+        },
       },
     });
 
@@ -102,6 +161,11 @@ export class ProductsService {
       where: { id },
       include: {
         category: true,
+        productTags: {
+          include: {
+            tag: true,
+          },
+        },
       },
     });
     if (!product) {
@@ -143,17 +207,66 @@ export class ProductsService {
       }
     }
 
-    const updateData: Prisma.ProductUncheckedUpdateInput = { ...updateProductDto };
+    const tagIds = updateProductDto.tagIds
+      ? this.uniqueTagIds(updateProductDto.tagIds)
+      : undefined;
+    if (tagIds) {
+      await this.ensureTagsExist(tagIds);
+    }
+
+    const updateData: Prisma.ProductUncheckedUpdateInput = {};
+
+    if (updateProductDto.name !== undefined) updateData.name = updateProductDto.name;
+    if (updateProductDto.description !== undefined)
+      updateData.description = updateProductDto.description;
     if (updateProductDto.price !== undefined) {
       updateData.price = new Prisma.Decimal(updateProductDto.price);
     }
+    if (updateProductDto.stock !== undefined) updateData.stock = updateProductDto.stock;
+    if (updateProductDto.sku !== undefined) updateData.sku = updateProductDto.sku;
+    if (updateProductDto.imageUrl !== undefined) updateData.imageUrl = updateProductDto.imageUrl;
+    if (updateProductDto.categoryId !== undefined)
+      updateData.categoryId = updateProductDto.categoryId;
+    if (updateProductDto.isActive !== undefined) updateData.isActive = updateProductDto.isActive;
 
-    const updatedProduct = await this.prisma.product.update({
-      where: { id },
-      data: updateData,
-      include: {
-        category: true,
-      },
+    const updatedProduct = await this.prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: updateData,
+      });
+
+      if (tagIds !== undefined) {
+        await tx.productTag.deleteMany({
+          where: { productId: id },
+        });
+
+        if (tagIds.length > 0) {
+          await tx.productTag.createMany({
+            data: tagIds.map((tagId) => ({
+              productId: id,
+              tagId,
+            })),
+          });
+        }
+      }
+
+      const productWithRelations = await tx.product.findUnique({
+        where: { id },
+        include: {
+          category: true,
+          productTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
+
+      if (!productWithRelations) {
+        throw new NotFoundException('Product not found');
+      }
+
+      return productWithRelations;
     });
 
     return this.formatProduct(updatedProduct);
@@ -213,6 +326,11 @@ export class ProductsService {
         where: { id },
         include: {
           category: true,
+          productTags: {
+            include: {
+              tag: true,
+            },
+          },
         },
       });
 
@@ -256,11 +374,43 @@ export class ProductsService {
     return { message: 'Product deleted successfully' };
   }
 
-  private formatProduct(product: Product & { category: Category }): ProductResponseDto {
+  private formatProduct(product: ProductWithCategoryAndTags): ProductResponseDto {
     return {
       ...product,
       price: Number(product.price),
       category: product.category.name,
+      tags: product.productTags?.map((productTag) => ({
+        id: productTag.tag.id,
+        name: productTag.tag.name,
+        slug: productTag.tag.slug,
+      })),
     };
+  }
+
+  private uniqueTagIds(tagIds?: string[]): string[] {
+    if (!tagIds?.length) {
+      return [];
+    }
+
+    return [...new Set(tagIds.map((tagId) => tagId.trim()))].filter(
+      (tagId) => tagId.length > 0,
+    );
+  }
+
+  private async ensureTagsExist(tagIds: string[]): Promise<void> {
+    const foundTags = await this.prisma.tag.findMany({
+      where: {
+        id: {
+          in: tagIds,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (foundTags.length !== tagIds.length) {
+      throw new NotFoundException('One or more tags not found');
+    }
   }
 }

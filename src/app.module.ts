@@ -13,6 +13,7 @@ import { MailsModule } from './common/mails/mails.module';
 import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ProductsModule } from './modules/products/products.module';
+import { TagsModule } from './modules/tags/tags.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { ProductsModule } from './modules/products/products.module';
     UsersModule,
     CategoriesModule,
     ProductsModule,
+    TagsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -1,5 +1,25 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+class ProductTagResponseDto {
+  @ApiProperty({
+    description: 'Tag ID',
+    example: 'tag-id-1',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Tag name',
+    example: 'Summer Sale',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'Tag slug',
+    example: 'summer-sale',
+  })
+  slug: string;
+}
+
 export class ProductResponseDto {
   @ApiProperty({
     description: 'Product ID',
@@ -49,6 +69,13 @@ export class ProductResponseDto {
     example: 'Electronics',
   })
   category: string | null;
+
+  @ApiProperty({
+    description: 'Product tags',
+    type: [ProductTagResponseDto],
+    required: false,
+  })
+  tags?: ProductTagResponseDto[];
 
   @ApiProperty({
     description: 'Product availability status',

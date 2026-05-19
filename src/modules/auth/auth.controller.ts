@@ -4,6 +4,8 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Req,
+  Res,
   Post,
   Query,
   UseGuards,
@@ -11,15 +13,61 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { JwtRefreshAuthGuard } from 'src/common/guards/jwt-refresh-auth.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth-guard';
+import type { Request, Response } from 'express';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  private readonly accessTokenCookie = 'the-hole.access_token';
+  private readonly refreshTokenCookie = 'the-hole.refresh_token';
+
+  private buildCookieOptions(maxAge: number) {
+    return {
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge,
+    };
+  }
+
+  private setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
+    res.cookie(this.accessTokenCookie, accessToken, this.buildCookieOptions(15 * 60 * 1000));
+    res.cookie(this.refreshTokenCookie, refreshToken, this.buildCookieOptions(7 * 24 * 60 * 60 * 1000));
+  }
+
+  private clearAuthCookies(res: Response) {
+    const clearOptions = {
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+    };
+    res.clearCookie(this.accessTokenCookie, clearOptions);
+    res.clearCookie(this.refreshTokenCookie, clearOptions);
+  }
+
+  private getCookie(req: Request, name: string) {
+    const cookieHeader = req.headers.cookie;
+    if (!cookieHeader) {
+      return undefined;
+    }
+
+    const value = cookieHeader
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${name}=`))
+      ?.slice(name.length + 1);
+
+    return value ? decodeURIComponent(value) : undefined;
+  }
 
   @Post('register')
   @HttpCode(201)
@@ -51,8 +99,17 @@ export class AuthController {
     status: 400,
     description: 'Bad Request. Validation failed or user already exists',
   })
-  async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
-    return await this.authService.register(registerDto);
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Omit<AuthResponseDto, 'accessToken' | 'refreshToken'>> {
+    const result = await this.authService.register(registerDto);
+    this.setAuthCookies(res, result.accessToken!, result.refreshToken!);
+    return {
+      status: result.status,
+      message: result.message,
+      user: result.user,
+    };
   }
 
   @Post('login')
@@ -73,8 +130,17 @@ export class AuthController {
     status: 429,
     description: 'Too Many Requests. Rate limit exceeded',
   })
-  async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
-    return await this.authService.login(loginDto);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Omit<AuthResponseDto, 'accessToken' | 'refreshToken'>> {
+    const result = await this.authService.login(loginDto);
+    this.setAuthCookies(res, result.accessToken!, result.refreshToken!);
+    return {
+      status: result.status,
+      message: result.message,
+      user: result.user,
+    };
   }
 
   @Post('logout')
@@ -94,8 +160,20 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized. Invalid refresh token or session not found',
   })
-  async logout(@Body() logoutDto: LogoutDto): Promise<{ status: boolean; message: string }> {
-    return await this.authService.logout(logoutDto);
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() logoutDto: LogoutDto,
+  ): Promise<{ status: boolean; message: string }> {
+    const refreshToken = logoutDto?.refreshToken ?? this.getCookie(req, this.refreshTokenCookie);
+    if (!refreshToken) {
+      this.clearAuthCookies(res);
+      return { status: true, message: 'Logout successful' };
+    }
+
+    const result = await this.authService.logout({ refreshToken });
+    this.clearAuthCookies(res);
+    return result;
   }
 
   @Post('refresh')
@@ -122,8 +200,45 @@ export class AuthController {
       role: string;
       refreshToken: string;
     },
-  ): Promise<AuthResponseDto> {
-    return await this.authService.refreshTokens(user);
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Omit<AuthResponseDto, 'accessToken' | 'refreshToken'>> {
+    const result = await this.authService.refreshTokens(user);
+    this.setAuthCookies(res, result.accessToken!, result.refreshToken!);
+    return {
+      status: result.status,
+      message: result.message,
+      user: result.user,
+    };
+  }
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-AUTH')
+  @ApiOperation({
+    summary: 'Get current authenticated user',
+    description: 'Returns the currently authenticated user based on the HttpOnly access cookie',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  async me(
+    @GetUser()
+    user: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      birthday: Date | null;
+      phoneNumber: string | null;
+      role: string;
+    },
+  ) {
+    return { status: true, message: 'Current user fetched successfully', user };
   }
 
   @Get('confirm')

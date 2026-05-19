@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsNotEmpty,
   IsNumber,
@@ -78,6 +79,17 @@ export class CreateProductDto {
   })
   @IsString()
   categoryId: string;
+
+  @ApiProperty({
+    description: 'List of tag IDs assigned to the product',
+    example: ['tag-id-1', 'tag-id-2'],
+    required: false,
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  tagIds?: string[];
 
   @ApiProperty({
     description: 'Whether product is active and available for purchase',

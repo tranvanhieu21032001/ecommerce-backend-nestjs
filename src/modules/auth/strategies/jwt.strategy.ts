@@ -9,6 +9,25 @@ type JwtPayload = {
   email: string;
 };
 
+function extractCookieToken(req: { headers?: { cookie?: string } } | undefined, name: string) {
+  const cookieHeader = req?.headers?.cookie;
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookie = cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`));
+
+  if (!cookie) {
+    return null;
+  }
+
+  const value = cookie.slice(name.length + 1);
+  return value ? decodeURIComponent(value) : null;
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -21,7 +40,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (req) => extractCookieToken(req, 'the-hole.access_token'),
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: jwtSecret,
     });

@@ -159,6 +159,10 @@ export class AuthService {
 
   async logout(logoutDto: LogoutDto): Promise<{ status: boolean; message: string }> {
     const { refreshToken } = logoutDto;
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
     let payload: { sub: string };
 
     try {
