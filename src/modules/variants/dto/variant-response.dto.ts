@@ -1,25 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-class VariantProductResponseDto {
-  @ApiProperty({
-    description: 'Product ID',
-    example: '550e8400-e29b-41d4-a716-446655440000',
-  })
-  id: string;
-
-  @ApiProperty({
-    description: 'Product name',
-    example: 'Wireless Headphones',
-  })
-  name: string;
-
-  @ApiProperty({
-    description: 'Product SKU',
-    example: 'WH-001',
-  })
-  sku: string;
-}
-
 export class VariantResponseDto {
   @ApiProperty({
     description: 'Variant ID',
@@ -59,16 +39,19 @@ export class VariantResponseDto {
   imageUrl: string | null;
 
   @ApiProperty({
+    description: 'Variant attributes such as color, size, capacity, or material',
+    example: {
+      color: 'Black',
+      size: 'M',
+    },
+  })
+  attributes: Record<string, unknown>;
+
+  @ApiProperty({
     description: 'Variant availability status',
     example: true,
   })
   isActive: boolean;
-
-  @ApiProperty({
-    description: 'Product that owns this variant',
-    type: VariantProductResponseDto,
-  })
-  product: VariantProductResponseDto;
 
   @ApiProperty({
     description: 'Creation timestamp',

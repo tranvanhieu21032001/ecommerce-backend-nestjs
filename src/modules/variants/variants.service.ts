@@ -1,26 +1,24 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Product, Variant } from '@prisma/client';
+import { Prisma, Variant } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { QueryVariantDto } from './dto/query-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { VariantResponseDto } from './dto/variant-response.dto';
 
-type VariantWithProduct = Variant & {
-  product: Pick<Product, 'id' | 'name' | 'sku'>;
-};
-
 @Injectable()
 export class VariantsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createVariantDto: CreateVariantDto): Promise<VariantResponseDto> {
-    await this.ensureProductExists(createVariantDto.productId);
-    await this.ensureSkuAvailable(createVariantDto.sku);
+    const sku = createVariantDto.sku?.trim() || this.buildSku(createVariantDto.name);
+    await this.ensureSkuAvailable(sku);
 
     const variant = await this.prisma.variant.create({
-      data: createVariantDto,
-      include: this.variantInclude,
+      data: {
+        ...createVariantDto,
+        sku,
+      },
     });
 
     return this.formatVariant(variant);
@@ -30,12 +28,8 @@ export class VariantsService {
     data: VariantResponseDto[];
     meta: { total: number; page: number; limit: number; totalPages: number };
   }> {
-    const { productId, isActive, search, page = 1, limit = 10 } = queryDto;
+    const { isActive, search, page = 1, limit = 10 } = queryDto;
     const where: Prisma.VariantWhereInput = {};
-
-    if (productId) {
-      where.productId = productId;
-    }
 
     if (isActive !== undefined) {
       where.isActive = isActive;
@@ -54,7 +48,6 @@ export class VariantsService {
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: 'desc' },
-      include: this.variantInclude,
     });
 
     return {
@@ -71,7 +64,6 @@ export class VariantsService {
   async findOne(id: string): Promise<VariantResponseDto> {
     const variant = await this.prisma.variant.findUnique({
       where: { id },
-      include: this.variantInclude,
     });
 
     if (!variant) {
@@ -84,7 +76,6 @@ export class VariantsService {
   async findBySku(sku: string): Promise<VariantResponseDto> {
     const variant = await this.prisma.variant.findUnique({
       where: { sku },
-      include: this.variantInclude,
     });
 
     if (!variant) {
@@ -103,10 +94,6 @@ export class VariantsService {
       throw new NotFoundException('Variant not found');
     }
 
-    if (updateVariantDto.productId && updateVariantDto.productId !== existingVariant.productId) {
-      await this.ensureProductExists(updateVariantDto.productId);
-    }
-
     if (updateVariantDto.sku && updateVariantDto.sku !== existingVariant.sku) {
       await this.ensureSkuAvailable(updateVariantDto.sku);
     }
@@ -114,7 +101,6 @@ export class VariantsService {
     const variant = await this.prisma.variant.update({
       where: { id },
       data: updateVariantDto,
-      include: this.variantInclude,
     });
 
     return this.formatVariant(variant);
@@ -136,27 +122,6 @@ export class VariantsService {
     return { message: 'Variant deleted successfully' };
   }
 
-  private readonly variantInclude = {
-    product: {
-      select: {
-        id: true,
-        name: true,
-        sku: true,
-      },
-    },
-  } satisfies Prisma.VariantInclude;
-
-  private async ensureProductExists(productId: string): Promise<void> {
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
-      select: { id: true },
-    });
-
-    if (!product) {
-      throw new NotFoundException('Product not found');
-    }
-  }
-
   private async ensureSkuAvailable(sku: string): Promise<void> {
     const existingSku = await this.prisma.variant.findUnique({
       where: { sku },
@@ -167,7 +132,7 @@ export class VariantsService {
     }
   }
 
-  private formatVariant(variant: VariantWithProduct): VariantResponseDto {
+  private formatVariant(variant: Variant): VariantResponseDto {
     return {
       id: variant.id,
       name: variant.name,
@@ -175,14 +140,26 @@ export class VariantsService {
       price: Number(variant.price),
       stock: variant.stock,
       imageUrl: variant.imageUrl,
+      attributes: this.formatAttributes(variant.attributes),
       isActive: variant.isActive,
-      product: {
-        id: variant.product.id,
-        name: variant.product.name,
-        sku: variant.product.sku,
-      },
       createdAt: variant.createdAt,
       updatedAt: variant.updatedAt,
     };
+  }
+
+  private formatAttributes(attributes: Prisma.JsonValue): Record<string, unknown> {
+    if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+      return {};
+    }
+
+    return attributes;
+  }
+
+  private buildSku(name: string): string {
+    return name
+      .trim()
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toUpperCase();
   }
 }
