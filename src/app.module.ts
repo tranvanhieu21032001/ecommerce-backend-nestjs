@@ -16,6 +16,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { BrandsModule } from './modules/brands/brands.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { VariantsModule } from './modules/variants/variants.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     ProductsModule,
     TagsModule,
     BrandsModule,
+    VariantsModule,
     UploadsModule,
   ],
   controllers: [AppController],

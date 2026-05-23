@@ -166,6 +166,7 @@ model Product {
   orderItems  OrderItem[]
   cartItems   CartItem[]
   productTags ProductTag[]
+  variants    Variant[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -177,6 +178,29 @@ model Product {
   @@index([brandId])
   @@index([isActive])
   @@map("products")
+}
+
+model Variant {
+  id       String  @id @default(uuid())
+  name     String
+  sku      String  @unique
+  price    Decimal @db.Decimal(10, 2)
+  stock    Int     @default(0)
+  imageUrl String?
+  isActive Boolean @default(true)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([sku])
+  @@index([name])
+  @@index([productId])
+  @@index([isActive])
+  @@map("variants")
 }
 
 model Tag {
