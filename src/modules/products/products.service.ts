@@ -1,12 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { Brand, Category, Prisma, Product } from '@prisma/client';
+import Redis from 'ioredis';
 import { ProductResponseDto } from './dto/product-response.dto';
 import { QueryProductDto } from './dto/query-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -25,7 +28,13 @@ type ProductWithCategoryAndTags = Product & {
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ProductsService.name);
+  private readonly brandCachePattern = 'brands:*';
+
+  constructor(
+    private prisma: PrismaService,
+    @Inject('REDIS_CLIENT') private readonly redis: Redis,
+  ) {}
 
   // Create product
   async create(createProductDto: CreateProductDto): Promise<ProductResponseDto> {
@@ -102,6 +111,10 @@ export class ProductsService {
 
       return productWithRelations;
     });
+
+    if (createProductDto.brandId) {
+      await this.clearBrandCache();
+    }
 
     return this.formatProduct(product);
   }
@@ -301,6 +314,13 @@ export class ProductsService {
       return productWithRelations;
     });
 
+    if (
+      updateProductDto.brandId !== undefined &&
+      updateProductDto.brandId !== existingProduct.brandId
+    ) {
+      await this.clearBrandCache();
+    }
+
     return this.formatProduct(updatedProduct);
   }
 
@@ -404,6 +424,10 @@ export class ProductsService {
       where: { id },
     });
 
+    if (product.brandId) {
+      await this.clearBrandCache();
+    }
+
     return { message: 'Product deleted successfully' };
   }
 
@@ -451,5 +475,34 @@ export class ProductsService {
     if (foundTags.length !== tagIds.length) {
       throw new NotFoundException('One or more tags not found');
     }
+  }
+
+  private async clearBrandCache(): Promise<void> {
+    try {
+      const keys = await this.scanCacheKeys(this.brandCachePattern);
+
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to clear brand cache: ${this.getErrorMessage(error)}`);
+    }
+  }
+
+  private async scanCacheKeys(pattern: string): Promise<string[]> {
+    const keys: string[] = [];
+    let cursor = '0';
+
+    do {
+      const [nextCursor, batch] = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = nextCursor;
+      keys.push(...batch);
+    } while (cursor !== '0');
+
+    return keys;
+  }
+
+  private getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 }

@@ -40,7 +40,11 @@ export class AuthController {
 
   private setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
     res.cookie(this.accessTokenCookie, accessToken, this.buildCookieOptions(15 * 60 * 1000));
-    res.cookie(this.refreshTokenCookie, refreshToken, this.buildCookieOptions(7 * 24 * 60 * 60 * 1000));
+    res.cookie(
+      this.refreshTokenCookie,
+      refreshToken,
+      this.buildCookieOptions(7 * 24 * 60 * 60 * 1000),
+    );
   }
 
   private clearAuthCookies(res: Response) {
