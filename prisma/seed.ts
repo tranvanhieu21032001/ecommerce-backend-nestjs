@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Role, UserStatus } from '@prisma/client';
+import { DiscountType, PrismaClient, Role, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const adapter = new PrismaPg({
@@ -28,6 +28,9 @@ const brandNames = [
 ];
 
 const categoryNames = ['Men', 'Women', 'Kids', 'Shoes', 'Accessories'];
+
+const productImageUrl =
+  'https://res.cloudinary.com/dpow8afng/image/upload/v1779438510/ecommerce/products/placeholder.jpg';
 
 const tagNames = [
   'New Arrival',
@@ -71,6 +74,7 @@ const tagNames = [
   'Kids Friendly',
   'Travel Ready',
   'Fitness',
+  'Shoes',
   'Outdoor',
   'Home Decor',
   'Kitchen Essential',
@@ -96,6 +100,235 @@ const seedUsers = Array.from({ length: 20 }, (_, index) => {
     emailVerifiedAt: new Date(),
   };
 });
+
+const seedProducts = [
+  {
+    name: 'Nike Air Runner Jacket',
+    sku: 'SEED-NIKE-AIR-RUNNER-JACKET',
+    price: 129.99,
+    stock: 45,
+    categoryName: 'Men',
+    brandName: 'Nike',
+    tagNames: ['New Arrival', 'Flash Sale', 'Fitness'],
+  },
+  {
+    name: 'Adidas Training Hoodie',
+    sku: 'SEED-ADIDAS-TRAINING-HOODIE',
+    price: 89.99,
+    stock: 60,
+    categoryName: 'Men',
+    brandName: 'Adidas',
+    tagNames: ['Best Seller', 'Fitness', 'Budget Friendly'],
+  },
+  {
+    name: 'Zara Linen Shirt',
+    sku: 'SEED-ZARA-LINEN-SHIRT',
+    price: 49.99,
+    stock: 80,
+    categoryName: 'Men',
+    brandName: 'Zara',
+    tagNames: ['Summer Collection', 'Minimalist', 'Fashion'],
+  },
+  {
+    name: 'Uniqlo Smart Ankle Pants',
+    sku: 'SEED-UNIQLO-SMART-ANKLE-PANTS',
+    price: 59.99,
+    stock: 70,
+    categoryName: 'Men',
+    brandName: 'Uniqlo',
+    tagNames: ['Office Essential', 'Recommended', 'Minimalist'],
+  },
+  {
+    name: 'Gucci Signature Belt',
+    sku: 'SEED-GUCCI-SIGNATURE-BELT',
+    price: 399.99,
+    stock: 20,
+    categoryName: 'Accessories',
+    brandName: 'Gucci',
+    tagNames: ['Luxury', 'Premium', 'Gift Idea'],
+  },
+  {
+    name: 'Prada Nylon Crossbody Bag',
+    sku: 'SEED-PRADA-NYLON-CROSSBODY-BAG',
+    price: 899.99,
+    stock: 12,
+    categoryName: 'Accessories',
+    brandName: 'Prada',
+    tagNames: ['Luxury', 'Travel Ready', 'Limited Edition'],
+  },
+  {
+    name: 'Louis Vuitton Card Holder',
+    sku: 'SEED-LV-CARD-HOLDER',
+    price: 349.99,
+    stock: 18,
+    categoryName: 'Accessories',
+    brandName: 'Louis Vuitton',
+    tagNames: ['Luxury', 'Compact', 'Gift Idea'],
+  },
+  {
+    name: 'Chanel Classic Sunglasses',
+    sku: 'SEED-CHANEL-CLASSIC-SUNGLASSES',
+    price: 549.99,
+    stock: 15,
+    categoryName: 'Accessories',
+    brandName: 'Chanel',
+    tagNames: ['Premium', 'Summer Collection', 'Fashion'],
+  },
+  {
+    name: 'Dior Silk Scarf',
+    sku: 'SEED-DIOR-SILK-SCARF',
+    price: 299.99,
+    stock: 25,
+    categoryName: 'Women',
+    brandName: 'Dior',
+    tagNames: ['Luxury', 'Gift Idea', 'Featured'],
+  },
+  {
+    name: 'H&M Cotton Dress',
+    sku: 'SEED-HM-COTTON-DRESS',
+    price: 39.99,
+    stock: 100,
+    categoryName: 'Women',
+    brandName: 'H&M',
+    tagNames: ['Budget Friendly', 'Summer Collection', 'Fashion'],
+  },
+  {
+    name: 'Zara Satin Blazer',
+    sku: 'SEED-ZARA-SATIN-BLAZER',
+    price: 119.99,
+    stock: 40,
+    categoryName: 'Women',
+    brandName: 'Zara',
+    tagNames: ['Office Essential', 'Trending', 'Featured'],
+  },
+  {
+    name: 'Uniqlo Ultra Light Down Vest',
+    sku: 'SEED-UNIQLO-DOWN-VEST',
+    price: 79.99,
+    stock: 55,
+    categoryName: 'Women',
+    brandName: 'Uniqlo',
+    tagNames: ['Winter Collection', 'Lightweight', 'Travel Ready'],
+  },
+  {
+    name: 'Nike Kids Sports Set',
+    sku: 'SEED-NIKE-KIDS-SPORTS-SET',
+    price: 64.99,
+    stock: 75,
+    categoryName: 'Kids',
+    brandName: 'Nike',
+    tagNames: ['Kids Friendly', 'Fitness', 'Durable'],
+  },
+  {
+    name: 'Adidas Kids Sneakers',
+    sku: 'SEED-ADIDAS-KIDS-SNEAKERS',
+    price: 69.99,
+    stock: 65,
+    categoryName: 'Kids',
+    brandName: 'Adidas',
+    tagNames: ['Kids Friendly', 'Shoes', 'Best Seller'],
+  },
+  {
+    name: 'H&M Kids Denim Jacket',
+    sku: 'SEED-HM-KIDS-DENIM-JACKET',
+    price: 34.99,
+    stock: 90,
+    categoryName: 'Kids',
+    brandName: 'H&M',
+    tagNames: ['Kids Friendly', 'Budget Friendly', 'Durable'],
+  },
+  {
+    name: 'Nike Air Max Pulse',
+    sku: 'SEED-NIKE-AIR-MAX-PULSE',
+    price: 159.99,
+    stock: 50,
+    categoryName: 'Shoes',
+    brandName: 'Nike',
+    tagNames: ['Best Seller', 'High Rated', 'Flash Sale'],
+  },
+  {
+    name: 'Adidas Ultraboost Light',
+    sku: 'SEED-ADIDAS-ULTRABOOST-LIGHT',
+    price: 189.99,
+    stock: 35,
+    categoryName: 'Shoes',
+    brandName: 'Adidas',
+    tagNames: ['Premium', 'Fitness', 'Lightweight'],
+  },
+  {
+    name: 'Gucci Leather Loafers',
+    sku: 'SEED-GUCCI-LEATHER-LOAFERS',
+    price: 749.99,
+    stock: 10,
+    categoryName: 'Shoes',
+    brandName: 'Gucci',
+    tagNames: ['Luxury', 'Office Essential', 'Premium'],
+  },
+  {
+    name: 'Prada Cloudbust Sneakers',
+    sku: 'SEED-PRADA-CLOUDBUST-SNEAKERS',
+    price: 1099.99,
+    stock: 8,
+    categoryName: 'Shoes',
+    brandName: 'Prada',
+    tagNames: ['Luxury', 'Limited Edition', 'Trending'],
+  },
+  {
+    name: 'Dior B27 Low-Top Sneakers',
+    sku: 'SEED-DIOR-B27-LOW-TOP',
+    price: 1199.99,
+    stock: 9,
+    categoryName: 'Shoes',
+    brandName: 'Dior',
+    tagNames: ['Luxury', 'Exclusive', 'High Rated'],
+  },
+];
+
+const seedCoupons = [
+  {
+    code: 'FLASH50',
+    description: '50% off flash sale orders',
+    discountType: DiscountType.PERCENTAGE,
+    discountValue: 50,
+    minOrderAmount: 100,
+    maxDiscountAmount: 75,
+    usageLimit: 200,
+  },
+  {
+    code: 'WELCOME10',
+    description: '10% off first purchase',
+    discountType: DiscountType.PERCENTAGE,
+    discountValue: 10,
+    minOrderAmount: 30,
+    maxDiscountAmount: 25,
+    usageLimit: 500,
+  },
+  {
+    code: 'FREESHIP25',
+    description: 'Fixed discount for shipping support',
+    discountType: DiscountType.FIXED_AMOUNT,
+    discountValue: 25,
+    minOrderAmount: 80,
+    usageLimit: 300,
+  },
+  {
+    code: 'VIP100',
+    description: 'VIP fixed discount for premium carts',
+    discountType: DiscountType.FIXED_AMOUNT,
+    discountValue: 100,
+    minOrderAmount: 500,
+    usageLimit: 100,
+  },
+  {
+    code: 'SUMMER20',
+    description: '20% summer campaign discount',
+    discountType: DiscountType.PERCENTAGE,
+    discountValue: 20,
+    minOrderAmount: 60,
+    maxDiscountAmount: 40,
+    usageLimit: 250,
+  },
+];
 
 function generateSlug(value: string): string {
   return value
@@ -165,6 +398,111 @@ async function main() {
     });
   }
 
+  const [createdCategories, createdBrands, createdTags] = await Promise.all([
+    prisma.category.findMany({
+      where: { slug: { in: categories.map((category) => category.slug) } },
+    }),
+    prisma.brand.findMany({
+      where: { slug: { in: brands.map((brand) => brand.slug) } },
+    }),
+    prisma.tag.findMany({
+      where: { slug: { in: tags.map((tag) => tag.slug) } },
+    }),
+  ]);
+
+  const categoryByName = new Map(createdCategories.map((category) => [category.name, category]));
+  const brandByName = new Map(createdBrands.map((brand) => [brand.name, brand]));
+  const tagByName = new Map(createdTags.map((tag) => [tag.name, tag]));
+
+  for (const seedProduct of seedProducts) {
+    const category = categoryByName.get(seedProduct.categoryName);
+    const brand = brandByName.get(seedProduct.brandName);
+
+    if (!category || !brand) {
+      throw new Error(`Missing category or brand for product ${seedProduct.sku}`);
+    }
+
+    const product = await prisma.product.upsert({
+      where: { sku: seedProduct.sku },
+      update: {
+        name: seedProduct.name,
+        description: `${seedProduct.name} from ${seedProduct.brandName}.`,
+        price: seedProduct.price,
+        stock: seedProduct.stock,
+        imageUrl: productImageUrl,
+        categoryId: category.id,
+        brandId: brand.id,
+        isActive: true,
+      },
+      create: {
+        name: seedProduct.name,
+        description: `${seedProduct.name} from ${seedProduct.brandName}.`,
+        price: seedProduct.price,
+        stock: seedProduct.stock,
+        sku: seedProduct.sku,
+        imageUrl: productImageUrl,
+        categoryId: category.id,
+        brandId: brand.id,
+        isActive: true,
+      },
+    });
+
+    await prisma.productImage.deleteMany({
+      where: { productId: product.id },
+    });
+
+    await prisma.productImage.createMany({
+      data: [
+        {
+          productId: product.id,
+          imageUrl: productImageUrl,
+          sortOrder: 0,
+          isPrimary: true,
+        },
+      ],
+    });
+
+    await prisma.productTag.deleteMany({
+      where: { productId: product.id },
+    });
+
+    await prisma.productTag.createMany({
+      data: seedProduct.tagNames.map((tagName) => {
+        const tag = tagByName.get(tagName);
+
+        if (!tag) {
+          throw new Error(`Missing tag ${tagName} for product ${seedProduct.sku}`);
+        }
+
+        return {
+          productId: product.id,
+          tagId: tag.id,
+        };
+      }),
+    });
+  }
+
+  const couponStartsAt = new Date('2026-05-24T00:00:00.000Z');
+  const couponExpiresAt = new Date('2030-12-31T23:59:59.000Z');
+
+  for (const coupon of seedCoupons) {
+    await prisma.coupon.upsert({
+      where: { code: coupon.code },
+      update: {
+        ...coupon,
+        startsAt: couponStartsAt,
+        expiresAt: couponExpiresAt,
+        isActive: true,
+      },
+      create: {
+        ...coupon,
+        startsAt: couponStartsAt,
+        expiresAt: couponExpiresAt,
+        isActive: true,
+      },
+    });
+  }
+
   const hashedPassword = await argon2.hash('Password@123');
 
   for (const user of seedUsers) {
@@ -189,6 +527,8 @@ async function main() {
   console.log(`Seeded ${categories.length} categories.`);
   console.log(`Seeded ${brands.length} brands.`);
   console.log(`Seeded ${tags.length} tags.`);
+  console.log(`Seeded ${seedProducts.length} products.`);
+  console.log(`Seeded ${seedCoupons.length} coupons.`);
   console.log(`Seeded ${seedUsers.length} users.`);
 }
 

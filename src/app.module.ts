@@ -17,6 +17,7 @@ import { TagsModule } from './modules/tags/tags.module';
 import { BrandsModule } from './modules/brands/brands.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { VariantsModule } from './modules/variants/variants.module';
+import { CouponsModule } from './modules/coupons/coupons.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { VariantsModule } from './modules/variants/variants.module';
     TagsModule,
     BrandsModule,
     VariantsModule,
+    CouponsModule,
     UploadsModule,
   ],
   controllers: [AppController],
