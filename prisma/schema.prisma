@@ -163,12 +163,14 @@ model Product {
   brand   Brand?  @relation(fields: [brandId], references: [id])
 
   // Relations
-  orderItems  OrderItem[]
-  cartItems   CartItem[]
-  productTags ProductTag[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  deletedAt   DateTime?
+  orderItems        OrderItem[]
+  cartItems         CartItem[]
+  productTags       ProductTag[]
+  productVariations ProductVariation[]
+  productImages     ProductImage[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  deletedAt         DateTime?
 
   @@index([sku])
   @@index([name])
@@ -176,6 +178,23 @@ model Product {
   @@index([brandId])
   @@index([isActive])
   @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  imageUrl  String
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([isPrimary])
+  @@map("product_images")
 }
 
 model Variant {
@@ -188,14 +207,53 @@ model Variant {
   attributes Json    @default("{}")
   isActive   Boolean @default(true)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  variationOptions ProductVariationOption[]
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  deletedAt        DateTime?
 
   @@index([sku])
   @@index([name])
   @@index([isActive])
   @@map("variants")
+}
+
+model ProductVariation {
+  id        String  @id @default(uuid())
+  productId String
+  sku       String?
+  price     Decimal @db.Decimal(10, 2)
+  stock     Int     @default(0)
+  imageUrl  String?
+  isActive  Boolean @default(true)
+
+  product Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options ProductVariationOption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([sku])
+  @@index([isActive])
+  @@map("product_variations")
+}
+
+model ProductVariationOption {
+  id                 String @id @default(uuid())
+  productVariationId String
+  variantId          String
+
+  productVariation ProductVariation @relation(fields: [productVariationId], references: [id], onDelete: Cascade)
+  variant          Variant          @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productVariationId, variantId])
+  @@index([productVariationId])
+  @@index([variantId])
+  @@map("product_variation_options")
 }
 
 model Tag {

@@ -47,6 +47,94 @@ class ProductBrandResponseDto {
   logoUrl: string | null;
 }
 
+class ProductVariationOptionResponseDto {
+  @ApiProperty({
+    description: 'Variant option ID',
+    example: 'variant-id-1',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Variant option name',
+    example: 'Color - Black',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'Variant attributes',
+    example: {
+      Color: 'Black',
+      colorCode: '#000000',
+    },
+  })
+  attributes: Record<string, unknown>;
+}
+
+class ProductVariationResponseDto {
+  @ApiProperty({
+    description: 'Variation combination ID',
+    example: 'variation-id-1',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Combination SKU',
+    example: 'TEE-YELLOW-M',
+    nullable: true,
+  })
+  sku: string | null;
+
+  @ApiProperty({
+    description: 'Combination price',
+    example: 5,
+  })
+  price: number;
+
+  @ApiProperty({
+    description: 'Combination stock',
+    example: 10,
+  })
+  stock: number;
+
+  @ApiProperty({
+    description: 'Combination status',
+    example: true,
+  })
+  isActive: boolean;
+
+  @ApiProperty({
+    description: 'Options that make up this combination',
+    type: [ProductVariationOptionResponseDto],
+  })
+  options: ProductVariationOptionResponseDto[];
+}
+
+class ProductImageResponseDto {
+  @ApiProperty({
+    description: 'Product image ID',
+    example: 'product-image-id-1',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Product image URL',
+    example: 'https://example.com/image.jpg',
+  })
+  imageUrl: string;
+
+  @ApiProperty({
+    description: 'Image display order',
+    example: 0,
+  })
+  sortOrder: number;
+
+  @ApiProperty({
+    description: 'Whether this is the primary image',
+    example: true,
+  })
+  isPrimary: boolean;
+}
+
 export class ProductResponseDto {
   @ApiProperty({
     description: 'Product ID',
@@ -92,6 +180,13 @@ export class ProductResponseDto {
   imageUrl: string | null;
 
   @ApiProperty({
+    description: 'Product gallery images',
+    type: [ProductImageResponseDto],
+    required: false,
+  })
+  images?: ProductImageResponseDto[];
+
+  @ApiProperty({
     description: 'Product category',
     example: 'Electronics',
   })
@@ -110,6 +205,13 @@ export class ProductResponseDto {
     required: false,
   })
   tags?: ProductTagResponseDto[];
+
+  @ApiProperty({
+    description: 'Product variation combinations',
+    type: [ProductVariationResponseDto],
+    required: false,
+  })
+  variations?: ProductVariationResponseDto[];
 
   @ApiProperty({
     description: 'Product availability status',

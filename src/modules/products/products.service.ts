@@ -17,12 +17,32 @@ import { UpdateProductDto } from './dto/update-product.dto';
 type ProductWithCategoryAndTags = Product & {
   category: Category;
   brand: Brand | null;
+  productImages?: Array<{
+    id: string;
+    imageUrl: string;
+    sortOrder: number;
+    isPrimary: boolean;
+  }>;
   productTags?: Array<{
     tag: {
       id: string;
       name: string;
       slug: string;
     };
+  }>;
+  productVariations?: Array<{
+    id: string;
+    sku: string | null;
+    price: Prisma.Decimal;
+    stock: number;
+    isActive: boolean;
+    options: Array<{
+      variant: {
+        id: string;
+        name: string;
+        attributes: Prisma.JsonValue;
+      };
+    }>;
   }>;
 };
 
@@ -39,6 +59,10 @@ export class ProductsService {
   // Create product
   async create(createProductDto: CreateProductDto): Promise<ProductResponseDto> {
     const tagIds = this.uniqueTagIds(createProductDto.tagIds);
+    const variations = createProductDto.variations ?? [];
+    const variationVariantIds = this.uniqueVariationVariantIds(variations);
+    const images = this.normalizeProductImages(createProductDto.images, createProductDto.imageUrl);
+    const primaryImageUrl = images.find((image) => image.isPrimary)?.imageUrl ?? null;
     const [category, brand] = await Promise.all([
       this.prisma.category.findUnique({
         where: { id: createProductDto.categoryId },
@@ -68,6 +92,10 @@ export class ProductsService {
       await this.ensureTagsExist(tagIds);
     }
 
+    if (variationVariantIds.length > 0) {
+      await this.ensureVariantsExist(variationVariantIds);
+    }
+
     const product = await this.prisma.$transaction(async (tx) => {
       const createdProduct = await tx.product.create({
         data: {
@@ -76,7 +104,7 @@ export class ProductsService {
           price: new Prisma.Decimal(createProductDto.price),
           stock: createProductDto.stock,
           sku: createProductDto.sku,
-          imageUrl: createProductDto.imageUrl,
+          imageUrl: primaryImageUrl,
           categoryId: createProductDto.categoryId,
           brandId: createProductDto.brandId,
           isActive: createProductDto.isActive,
@@ -92,17 +120,39 @@ export class ProductsService {
         });
       }
 
+      if (images.length > 0) {
+        await tx.productImage.createMany({
+          data: images.map((image) => ({
+            productId: createdProduct.id,
+            imageUrl: image.imageUrl,
+            sortOrder: image.sortOrder,
+            isPrimary: image.isPrimary,
+          })),
+        });
+      }
+
+      for (const variation of variations) {
+        const createdVariation = await tx.productVariation.create({
+          data: {
+            productId: createdProduct.id,
+            sku: variation.sku,
+            price: new Prisma.Decimal(variation.price),
+            stock: variation.stock,
+            isActive: variation.isActive,
+          },
+        });
+
+        await tx.productVariationOption.createMany({
+          data: this.uniqueIds(variation.variantIds).map((variantId) => ({
+            productVariationId: createdVariation.id,
+            variantId,
+          })),
+        });
+      }
+
       const productWithRelations = await tx.product.findUnique({
         where: { id: createdProduct.id },
-        include: {
-          category: true,
-          brand: true,
-          productTags: {
-            include: {
-              tag: true,
-            },
-          },
-        },
+        include: this.productInclude,
       });
 
       if (!productWithRelations) {
@@ -165,15 +215,7 @@ export class ProductsService {
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: 'desc' },
-      include: {
-        category: true,
-        brand: true,
-        productTags: {
-          include: {
-            tag: true,
-          },
-        },
-      },
+      include: this.productInclude,
     });
 
     return {
@@ -191,15 +233,7 @@ export class ProductsService {
   async findOne(id: string): Promise<ProductResponseDto> {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      include: {
-        category: true,
-        brand: true,
-        productTags: {
-          include: {
-            tag: true,
-          },
-        },
-      },
+      include: this.productInclude,
     });
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -253,8 +287,16 @@ export class ProductsService {
     }
 
     const tagIds = updateProductDto.tagIds ? this.uniqueTagIds(updateProductDto.tagIds) : undefined;
+    const variations = updateProductDto.variations;
+    const images =
+      updateProductDto.images !== undefined
+        ? this.normalizeProductImages(updateProductDto.images, updateProductDto.imageUrl)
+        : undefined;
     if (tagIds) {
       await this.ensureTagsExist(tagIds);
+    }
+    if (variations) {
+      await this.ensureVariantsExist(this.uniqueVariationVariantIds(variations));
     }
 
     const updateData: Prisma.ProductUncheckedUpdateInput = {};
@@ -267,7 +309,11 @@ export class ProductsService {
     }
     if (updateProductDto.stock !== undefined) updateData.stock = updateProductDto.stock;
     if (updateProductDto.sku !== undefined) updateData.sku = updateProductDto.sku;
-    if (updateProductDto.imageUrl !== undefined) updateData.imageUrl = updateProductDto.imageUrl;
+    if (images !== undefined) {
+      updateData.imageUrl = images.find((image) => image.isPrimary)?.imageUrl ?? null;
+    } else if (updateProductDto.imageUrl !== undefined) {
+      updateData.imageUrl = updateProductDto.imageUrl;
+    }
     if (updateProductDto.categoryId !== undefined)
       updateData.categoryId = updateProductDto.categoryId;
     if (updateProductDto.brandId !== undefined) updateData.brandId = updateProductDto.brandId;
@@ -294,17 +340,51 @@ export class ProductsService {
         }
       }
 
+      if (images !== undefined) {
+        await tx.productImage.deleteMany({
+          where: { productId: id },
+        });
+
+        if (images.length > 0) {
+          await tx.productImage.createMany({
+            data: images.map((image) => ({
+              productId: id,
+              imageUrl: image.imageUrl,
+              sortOrder: image.sortOrder,
+              isPrimary: image.isPrimary,
+            })),
+          });
+        }
+      }
+
+      if (variations !== undefined) {
+        await tx.productVariation.deleteMany({
+          where: { productId: id },
+        });
+
+        for (const variation of variations) {
+          const createdVariation = await tx.productVariation.create({
+            data: {
+              productId: id,
+              sku: variation.sku,
+              price: new Prisma.Decimal(variation.price),
+              stock: variation.stock,
+              isActive: variation.isActive,
+            },
+          });
+
+          await tx.productVariationOption.createMany({
+            data: this.uniqueIds(variation.variantIds).map((variantId) => ({
+              productVariationId: createdVariation.id,
+              variantId,
+            })),
+          });
+        }
+      }
+
       const productWithRelations = await tx.product.findUnique({
         where: { id },
-        include: {
-          category: true,
-          brand: true,
-          productTags: {
-            include: {
-              tag: true,
-            },
-          },
-        },
+        include: this.productInclude,
       });
 
       if (!productWithRelations) {
@@ -376,15 +456,7 @@ export class ProductsService {
 
       const updatedProduct = await tx.product.findUnique({
         where: { id },
-        include: {
-          category: true,
-          brand: true,
-          productTags: {
-            include: {
-              tag: true,
-            },
-          },
-        },
+        include: this.productInclude,
       });
 
       if (!updatedProduct) {
@@ -435,6 +507,12 @@ export class ProductsService {
     return {
       ...product,
       price: Number(product.price),
+      images: product.productImages?.map((image) => ({
+        id: image.id,
+        imageUrl: image.imageUrl,
+        sortOrder: image.sortOrder,
+        isPrimary: image.isPrimary,
+      })),
       category: product.category.name,
       brand: product.brand
         ? {
@@ -449,15 +527,105 @@ export class ProductsService {
         name: productTag.tag.name,
         slug: productTag.tag.slug,
       })),
+      variations: product.productVariations?.map((variation) => ({
+        id: variation.id,
+        sku: variation.sku,
+        price: Number(variation.price),
+        stock: variation.stock,
+        isActive: variation.isActive,
+        options: variation.options.map((option) => ({
+          id: option.variant.id,
+          name: option.variant.name,
+          attributes: this.formatAttributes(option.variant.attributes),
+        })),
+      })),
     };
   }
 
+  private readonly productInclude = {
+    category: true,
+    brand: true,
+    productImages: {
+      orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        imageUrl: true,
+        sortOrder: true,
+        isPrimary: true,
+      },
+    },
+    productTags: {
+      include: {
+        tag: true,
+      },
+    },
+    productVariations: {
+      include: {
+        options: {
+          include: {
+            variant: {
+              select: {
+                id: true,
+                name: true,
+                attributes: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  } satisfies Prisma.ProductInclude;
+
   private uniqueTagIds(tagIds?: string[]): string[] {
-    if (!tagIds?.length) {
+    return this.uniqueIds(tagIds);
+  }
+
+  private uniqueIds(ids?: string[]): string[] {
+    if (!ids?.length) {
       return [];
     }
 
-    return [...new Set(tagIds.map((tagId) => tagId.trim()))].filter((tagId) => tagId.length > 0);
+    return [...new Set(ids.map((id) => id.trim()))].filter((id) => id.length > 0);
+  }
+
+  private uniqueVariationVariantIds(variations: NonNullable<CreateProductDto['variations']>): string[] {
+    return this.uniqueIds(variations.flatMap((variation) => variation.variantIds));
+  }
+
+  private normalizeProductImages(
+    images?: CreateProductDto['images'],
+    fallbackImageUrl?: string,
+  ): Array<{ imageUrl: string; sortOrder: number; isPrimary: boolean }> {
+    const normalized = (images ?? [])
+      .map((image, index) => ({
+        imageUrl: image.imageUrl.trim(),
+        sortOrder: image.sortOrder ?? index,
+        isPrimary: Boolean(image.isPrimary),
+      }))
+      .filter((image) => image.imageUrl.length > 0);
+
+    if (normalized.length === 0 && fallbackImageUrl?.trim()) {
+      return [
+        {
+          imageUrl: fallbackImageUrl.trim(),
+          sortOrder: 0,
+          isPrimary: true,
+        },
+      ];
+    }
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
+    const primaryIndex = normalized.findIndex((image) => image.isPrimary);
+    const resolvedPrimaryIndex = primaryIndex >= 0 ? primaryIndex : 0;
+
+    return normalized.map((image, index) => ({
+      ...image,
+      sortOrder: Math.max(0, image.sortOrder),
+      isPrimary: index === resolvedPrimaryIndex,
+    }));
   }
 
   private async ensureTagsExist(tagIds: string[]): Promise<void> {
@@ -475,6 +643,31 @@ export class ProductsService {
     if (foundTags.length !== tagIds.length) {
       throw new NotFoundException('One or more tags not found');
     }
+  }
+
+  private async ensureVariantsExist(variantIds: string[]): Promise<void> {
+    const foundVariants = await this.prisma.variant.findMany({
+      where: {
+        id: {
+          in: variantIds,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (foundVariants.length !== variantIds.length) {
+      throw new NotFoundException('One or more variants not found');
+    }
+  }
+
+  private formatAttributes(attributes: Prisma.JsonValue): Record<string, unknown> {
+    if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) {
+      return {};
+    }
+
+    return attributes;
   }
 
   private async clearBrandCache(): Promise<void> {
