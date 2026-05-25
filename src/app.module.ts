@@ -18,6 +18,7 @@ import { BrandsModule } from './modules/brands/brands.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { VariantsModule } from './modules/variants/variants.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
+import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { CouponsModule } from './modules/coupons/coupons.module';
     VariantsModule,
     CouponsModule,
     UploadsModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [
