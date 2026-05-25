@@ -20,6 +20,8 @@ import { VariantsModule } from './modules/variants/variants.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { CartModule } from './modules/cart/cart.module';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
 
 @Module({
   imports: [
@@ -65,6 +67,8 @@ import { PaymentsModule } from './modules/payments/payments.module';
     UploadsModule,
     OrdersModule,
     PaymentsModule,
+    CartModule,
+    WishlistModule,
   ],
   controllers: [AppController],
   providers: [

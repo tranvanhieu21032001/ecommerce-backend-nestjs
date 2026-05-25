@@ -65,6 +65,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   orders                  Order[]
   carts                   Cart[]
+  wishlistItems           WishlistItem[]
   payments                Payment[]
 
   createdAt DateTime  @default(now())
@@ -171,6 +172,7 @@ model Product {
   // Relations
   orderItems        OrderItem[]
   cartItems         CartItem[]
+  wishlistItems     WishlistItem[]
   productTags       ProductTag[]
   productVariations ProductVariation[]
   productImages     ProductImage[]
@@ -332,6 +334,24 @@ model CartItem {
   @@index([cartId])
   @@index([productId])
   @@map("cart_items")
+}
+
+model WishlistItem {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@map("wishlist_items")
 }
 
 model Order {
