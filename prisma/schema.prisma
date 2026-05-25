@@ -40,6 +40,7 @@ enum PaymentMethod {
   STRIPE
   PAYPAL
   BANK_TRANSFER
+  PAYOS
 }
 
 enum DiscountType {
@@ -399,12 +400,20 @@ model OrderItem {
 }
 
 model Payment {
-  id            String         @id @default(uuid())
-  amount        Decimal        @db.Decimal(10, 2)
-  status        PaymentStatus  @default(PENDING)
-  method        PaymentMethod?
-  currency      String         @default("USD")
-  transactionId String?        @unique
+  id                 String         @id @default(uuid())
+  amount             Decimal        @db.Decimal(10, 2)
+  status             PaymentStatus  @default(PENDING)
+  method             PaymentMethod?
+  currency           String         @default("USD")
+  transactionId      String?        @unique
+  payosOrderCode     BigInt?        @unique
+  paymentLinkId      String?        @unique
+  payosBin           String?
+  payosAccountNumber String?
+  payosAccountName   String?
+  checkoutUrl        String?
+  qrCode             String?
+  expiresAt          DateTime?
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -420,6 +429,8 @@ model Payment {
   @@index([orderId])
   @@index([userId])
   @@index([transactionId])
+  @@index([payosOrderCode])
+  @@index([paymentLinkId])
   @@index([status])
   @@map("payments")
 }

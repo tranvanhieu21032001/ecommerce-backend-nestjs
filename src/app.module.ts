@@ -19,6 +19,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { VariantsModule } from './modules/variants/variants.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { OrdersModule } from './modules/orders/orders.module';
     CouponsModule,
     UploadsModule,
     OrdersModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

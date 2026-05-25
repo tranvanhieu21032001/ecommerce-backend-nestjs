@@ -75,6 +75,40 @@ export class OrderPaymentResponseDto {
   transactionId: string | null;
 
   @ApiProperty({
+    description: 'PayOS numeric order code used for VietQR payment',
+    nullable: true,
+    example: 174817440000001,
+  })
+  payosOrderCode: number | null;
+
+  @ApiProperty({
+    description: 'PayOS payment link identifier',
+    nullable: true,
+    example: null,
+  })
+  paymentLinkId: string | null;
+
+  @ApiProperty({
+    description: 'PayOS checkout URL',
+    nullable: true,
+    example: null,
+  })
+  checkoutUrl: string | null;
+
+  @ApiProperty({
+    description: 'VietQR payload returned by PayOS',
+    nullable: true,
+    example: null,
+  })
+  qrCode: string | null;
+
+  @ApiProperty({
+    description: 'Payment link expiration timestamp',
+    nullable: true,
+  })
+  expiresAt: Date | null;
+
+  @ApiProperty({
     description: 'Timestamp when payment was completed',
     nullable: true,
   })

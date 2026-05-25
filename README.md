@@ -49,6 +49,43 @@ This project follows the **Conventional Commits** standard. Please use the follo
 - **Devtools:** [NestJS Devtools](https://devtools.nestjs.com)
 - **Support:** [Discord Community](https://discord.gg/G7Qnnhy)
 
+## PayOS VietQR Payments
+
+Set the PayOS credentials in `.env` before using VietQR payment endpoints:
+
+```env
+PAYOS_CLIENT_ID=your_client_id
+PAYOS_API_KEY=your_api_key
+PAYOS_CHECKSUM_KEY=your_checksum_key
+```
+
+Create an order with `paymentMethod` set to `PAYOS`, then create a VietQR payment link:
+
+```http
+POST /api/v1/payments/payos/orders/:orderId/payment-link
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "returnUrl": "http://localhost:3000/checkout/success",
+  "cancelUrl": "http://localhost:3000/checkout/cancel"
+}
+```
+
+The public webhook receiver is:
+
+```http
+POST /api/v1/payments/payos/webhook
+```
+
+An admin can register that public URL with PayOS through:
+
+```http
+POST /api/v1/payments/payos/webhook/confirm
+```
+
+PayOS VietQR payments use `VND`, so order totals paid through PayOS must be positive whole-number amounts.
+
 ## 📄 License
 
 Nest is [MIT licensed](LICENSE).

@@ -1,6 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Coupon, DiscountType, OrderStatus, Prisma, Role } from '@prisma/client';
+import {
+  Coupon,
+  DiscountType,
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+  Role,
+} from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
@@ -20,7 +29,10 @@ type OrderWithRelations = Prisma.OrderGetPayload<{
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   async create(userId: string, createOrderDto: CreateOrderDto): Promise<OrderResponseDto> {
     if (Boolean(createOrderDto.cartId) === Boolean(createOrderDto.items?.length)) {
@@ -66,6 +78,10 @@ export class OrdersService {
       const shippingFee = 0;
       const taxAmount = 0;
       const totalAmount = this.roundMoney(subtotal + shippingFee + taxAmount - discountAmount);
+
+      if (createOrderDto.paymentMethod === PaymentMethod.PAYOS && !Number.isInteger(totalAmount)) {
+        throw new BadRequestException('PayOS VietQR payments require a whole-number VND amount');
+      }
 
       for (const item of items) {
         const updated = await tx.product.updateMany({
@@ -119,6 +135,7 @@ export class OrdersService {
             create: {
               amount: new Prisma.Decimal(totalAmount),
               method: createOrderDto.paymentMethod,
+              currency: createOrderDto.paymentMethod === PaymentMethod.PAYOS ? 'VND' : undefined,
               userId,
             },
           },
@@ -208,6 +225,10 @@ export class OrdersService {
   }
 
   async cancel(id: string, userId: string, role: Role): Promise<OrderResponseDto> {
+    await this.paymentsService.cancelPendingPaymentLink(
+      id,
+      role === Role.ADMIN ? { role } : { role, userId },
+    );
     return this.changeStatus(id, OrderStatus.CANCELLED, { userId, role });
   }
 
@@ -215,6 +236,10 @@ export class OrdersService {
     id: string,
     updateOrderStatusDto: UpdateOrderStatusDto,
   ): Promise<OrderResponseDto> {
+    if (updateOrderStatusDto.status === OrderStatus.CANCELLED) {
+      await this.paymentsService.cancelPendingPaymentLink(id, { role: Role.ADMIN });
+    }
+
     return this.changeStatus(id, updateOrderStatusDto.status);
   }
 
@@ -257,6 +282,11 @@ export class OrdersService {
       }
 
       if (nextStatus === OrderStatus.CANCELLED) {
+        await tx.payment.updateMany({
+          where: { orderId: order.id, status: PaymentStatus.PENDING },
+          data: { status: PaymentStatus.FAILED },
+        });
+
         for (const item of order.orderItems) {
           await tx.product.update({
             where: { id: item.productId },
@@ -450,6 +480,12 @@ export class OrdersService {
             method: order.payment.method,
             currency: order.payment.currency,
             transactionId: order.payment.transactionId,
+            payosOrderCode:
+              order.payment.payosOrderCode === null ? null : Number(order.payment.payosOrderCode),
+            paymentLinkId: order.payment.paymentLinkId,
+            checkoutUrl: order.payment.checkoutUrl,
+            qrCode: order.payment.qrCode,
+            expiresAt: order.payment.expiresAt,
             paidAt: order.payment.paidAt,
             createdAt: order.payment.createdAt,
             updatedAt: order.payment.updatedAt,
