@@ -8,6 +8,11 @@ export class AddCartItemDto {
   @IsNotEmpty()
   productId: string;
 
+  @ApiPropertyOptional({ description: 'Selected product variation ID' })
+  @IsString()
+  @IsOptional()
+  variationId?: string;
+
   @ApiPropertyOptional({ description: 'Quantity to add', example: 1, default: 1 })
   @Type(() => Number)
   @IsInt()

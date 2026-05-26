@@ -23,6 +23,13 @@ export class CreateOrderItemDto {
   @IsNotEmpty()
   productId: string;
 
+  @ApiPropertyOptional({
+    description: 'Selected product variation ID when the product has options',
+  })
+  @IsString()
+  @IsOptional()
+  variationId?: string;
+
   @ApiProperty({
     description: 'Quantity of the product to purchase',
     example: 2,

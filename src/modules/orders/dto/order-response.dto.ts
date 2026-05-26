@@ -15,6 +15,13 @@ export class OrderItemResponseDto {
   productId: string;
 
   @ApiProperty({
+    description: 'Selected product variation ID',
+    nullable: true,
+    example: null,
+  })
+  variationId: string | null;
+
+  @ApiProperty({
     description: 'Purchased quantity',
     example: 2,
   })

@@ -19,6 +19,13 @@ const cartInclude = {
           },
         },
       },
+      variation: {
+        include: {
+          options: {
+            include: { variant: true },
+          },
+        },
+      },
     },
   },
 } satisfies Prisma.CartInclude;
@@ -43,36 +50,71 @@ export class CartService {
     await this.prisma.$transaction(async (tx) => {
       const product = await tx.product.findFirst({
         where: { id: dto.productId, isActive: true },
-        select: { id: true, stock: true },
+        include: {
+          productVariations: { where: { isActive: true } },
+        },
       });
 
       if (!product) {
         throw new NotFoundException('Product not found or unavailable');
       }
 
+      const variation = dto.variationId
+        ? product.productVariations.find((item) => item.id === dto.variationId)
+        : null;
+
+      if (product.productVariations.length > 0 && !variation) {
+        throw new BadRequestException('Select a product variation before adding to cart');
+      }
+      if (dto.variationId && !variation) {
+        throw new BadRequestException('Selected product variation is unavailable');
+      }
+
       const cart = await this.getOrCreateOpenCart(tx, userId);
-      const existingItem = await tx.cartItem.findUnique({
-        where: { cartId_productId: { cartId: cart.id, productId: product.id } },
+      const existingItem = await tx.cartItem.findFirst({
+        where: {
+          cartId: cart.id,
+          productId: product.id,
+          variationId: variation?.id ?? null,
+        },
       });
       const nextQuantity = (existingItem?.quantity ?? 0) + quantity;
 
-      this.assertAvailableQuantity(nextQuantity, product.stock);
+      this.assertAvailableQuantity(nextQuantity, variation?.stock ?? product.stock);
 
-      await tx.cartItem.upsert({
-        where: { cartId_productId: { cartId: cart.id, productId: product.id } },
-        create: { cartId: cart.id, productId: product.id, quantity },
-        update: { quantity: nextQuantity },
-      });
+      if (existingItem) {
+        await tx.cartItem.update({
+          where: { id: existingItem.id },
+          data: { quantity: nextQuantity },
+        });
+      } else {
+        await tx.cartItem.create({
+          data: {
+            cartId: cart.id,
+            productId: product.id,
+            variationId: variation?.id,
+            quantity,
+          },
+        });
+      }
     });
 
     return this.findOpenCart(userId);
   }
 
-  async updateItem(userId: string, productId: string, dto: UpdateCartItemDto) {
+  async updateItem(
+    userId: string,
+    productId: string,
+    variationId: string | undefined,
+    dto: UpdateCartItemDto,
+  ) {
     const cart = await this.requireOpenCart(userId);
     const item = await this.prisma.cartItem.findFirst({
-      where: { cartId: cart.id, productId },
-      include: { product: { select: { stock: true, isActive: true } } },
+      where: { cartId: cart.id, productId, variationId: variationId ?? null },
+      include: {
+        product: { select: { stock: true, isActive: true } },
+        variation: { select: { stock: true, isActive: true } },
+      },
     });
 
     if (!item) {
@@ -81,8 +123,11 @@ export class CartService {
     if (!item.product.isActive) {
       throw new BadRequestException('Product is no longer available');
     }
+    if (item.variation && !item.variation.isActive) {
+      throw new BadRequestException('Selected product variation is no longer available');
+    }
 
-    this.assertAvailableQuantity(dto.quantity, item.product.stock);
+    this.assertAvailableQuantity(dto.quantity, item.variation?.stock ?? item.product.stock);
     await this.prisma.cartItem.update({
       where: { id: item.id },
       data: { quantity: dto.quantity },
@@ -91,10 +136,10 @@ export class CartService {
     return this.findOpenCart(userId);
   }
 
-  async removeItem(userId: string, productId: string) {
+  async removeItem(userId: string, productId: string, variationId?: string) {
     const cart = await this.requireOpenCart(userId);
     const deleted = await this.prisma.cartItem.deleteMany({
-      where: { cartId: cart.id, productId },
+      where: { cartId: cart.id, productId, variationId: variationId ?? null },
     });
 
     if (deleted.count === 0) {
@@ -150,6 +195,22 @@ export class CartService {
       cart?.cartItems.map((item) => ({
         id: item.id,
         quantity: item.quantity,
+        variationId: item.variationId,
+        variation: item.variation
+          ? {
+              id: item.variation.id,
+              sku: item.variation.sku,
+              price: Number(item.variation.price),
+              stock: item.variation.stock,
+              isActive: item.variation.isActive,
+              options: item.variation.options.map((option) => ({
+                id: option.variant.id,
+                name: option.variant.name,
+                attributes: option.variant.attributes,
+              })),
+            }
+          : null,
+        unitPrice: Number(item.variation?.price ?? item.product.price),
         product: {
           ...item.product,
           price: Number(item.product.price),
@@ -175,7 +236,7 @@ export class CartService {
       id: cart?.id ?? null,
       items,
       itemCount: items.reduce((count, item) => count + item.quantity, 0),
-      subtotal: items.reduce((total, item) => total + item.product.price * item.quantity, 0),
+      subtotal: items.reduce((total, item) => total + item.unitPrice * item.quantity, 0),
     };
   }
 }

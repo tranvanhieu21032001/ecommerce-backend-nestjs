@@ -235,8 +235,10 @@ model ProductVariation {
   imageUrl  String?
   isActive  Boolean @default(true)
 
-  product Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  options ProductVariationOption[]
+  product    Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options    ProductVariationOption[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -324,15 +326,19 @@ model CartItem {
   productId String
   product   Product @relation(fields: [productId], references: [id])
 
+  variationId String?
+  variation   ProductVariation? @relation(fields: [variationId], references: [id])
+
   cartId String
   cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([cartId, productId])
+  @@unique([cartId, productId, variationId])
   @@index([cartId])
   @@index([productId])
+  @@index([variationId])
   @@map("cart_items")
 }
 
@@ -408,6 +414,9 @@ model OrderItem {
   productId String
   product   Product @relation(fields: [productId], references: [id])
 
+  variationId String?
+  variation   ProductVariation? @relation(fields: [variationId], references: [id])
+
   orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -416,6 +425,7 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+  @@index([variationId])
   @@map("order_items")
 }
 

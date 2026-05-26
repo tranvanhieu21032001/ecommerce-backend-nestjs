@@ -247,6 +247,8 @@ export class ProductsService {
     const existingProduct = await this.prisma.product.findUnique({
       where: { id },
     });
+    const brandId =
+      updateProductDto.brandId !== undefined ? updateProductDto.brandId.trim() || null : undefined;
 
     if (!existingProduct) {
       throw new NotFoundException('Product not found');
@@ -274,15 +276,14 @@ export class ProductsService {
       }
     }
 
-    if (
-      updateProductDto.brandId !== undefined &&
-      updateProductDto.brandId !== existingProduct.brandId
-    ) {
-      const brand = await this.prisma.brand.findUnique({
-        where: { id: updateProductDto.brandId },
-      });
-      if (!brand) {
-        throw new NotFoundException('Brand not found');
+    if (brandId !== undefined && brandId !== existingProduct.brandId) {
+      if (brandId) {
+        const brand = await this.prisma.brand.findUnique({
+          where: { id: brandId },
+        });
+        if (!brand) {
+          throw new NotFoundException('Brand not found');
+        }
       }
     }
 
@@ -316,7 +317,7 @@ export class ProductsService {
     }
     if (updateProductDto.categoryId !== undefined)
       updateData.categoryId = updateProductDto.categoryId;
-    if (updateProductDto.brandId !== undefined) updateData.brandId = updateProductDto.brandId;
+    if (brandId !== undefined) updateData.brandId = brandId;
     if (updateProductDto.isActive !== undefined) updateData.isActive = updateProductDto.isActive;
 
     const updatedProduct = await this.prisma.$transaction(async (tx) => {
@@ -394,10 +395,7 @@ export class ProductsService {
       return productWithRelations;
     });
 
-    if (
-      updateProductDto.brandId !== undefined &&
-      updateProductDto.brandId !== existingProduct.brandId
-    ) {
+    if (brandId !== undefined && brandId !== existingProduct.brandId) {
       await this.clearBrandCache();
     }
 
@@ -588,7 +586,9 @@ export class ProductsService {
     return [...new Set(ids.map((id) => id.trim()))].filter((id) => id.length > 0);
   }
 
-  private uniqueVariationVariantIds(variations: NonNullable<CreateProductDto['variations']>): string[] {
+  private uniqueVariationVariantIds(
+    variations: NonNullable<CreateProductDto['variations']>,
+  ): string[] {
     return this.uniqueIds(variations.flatMap((variation) => variation.variantIds));
   }
 

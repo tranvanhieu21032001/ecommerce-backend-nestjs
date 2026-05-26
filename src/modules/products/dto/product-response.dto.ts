@@ -193,6 +193,12 @@ export class ProductResponseDto {
   category: string | null;
 
   @ApiProperty({
+    description: 'Product category ID',
+    example: 'category-id-1',
+  })
+  categoryId: string;
+
+  @ApiProperty({
     description: 'Product brand',
     type: ProductBrandResponseDto,
     nullable: true,

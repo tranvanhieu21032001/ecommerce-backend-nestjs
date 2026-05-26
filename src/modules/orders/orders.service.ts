@@ -17,6 +17,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
 type PurchaseItem = {
   productId: string;
+  variationId?: string | null;
   quantity: number;
 };
 
@@ -43,10 +44,19 @@ export class OrdersService {
       const items = await this.resolvePurchaseItems(tx, userId, createOrderDto);
       const products = await tx.product.findMany({
         where: { id: { in: items.map((item) => item.productId) } },
-        select: { id: true, price: true, stock: true, isActive: true },
+        select: {
+          id: true,
+          price: true,
+          stock: true,
+          isActive: true,
+          productVariations: {
+            where: { isActive: true },
+            select: { id: true, price: true, stock: true },
+          },
+        },
       });
 
-      if (products.length !== items.length) {
+      if (products.length !== new Set(items.map((item) => item.productId)).size) {
         throw new NotFoundException('One or more products not found');
       }
 
@@ -58,14 +68,24 @@ export class OrdersService {
         if (!product.isActive) {
           throw new BadRequestException('One or more products are unavailable');
         }
-        if (product.stock < item.quantity) {
+        const variation = item.variationId
+          ? product.productVariations.find((candidate) => candidate.id === item.variationId)
+          : null;
+        if (product.productVariations.length > 0 && !variation) {
+          throw new BadRequestException('Select a product variation before checkout');
+        }
+        if (item.variationId && !variation) {
+          throw new BadRequestException('Selected product variation is unavailable');
+        }
+        if (product.stock < item.quantity || (variation && variation.stock < item.quantity)) {
           throw new BadRequestException('Insufficient stock for one or more products');
         }
 
         return {
           productId: item.productId,
+          variationId: variation?.id,
           quantity: item.quantity,
-          price: product.price,
+          price: variation?.price ?? product.price,
         };
       });
 
@@ -95,6 +115,22 @@ export class OrdersService {
 
         if (updated.count === 0) {
           throw new BadRequestException('Insufficient stock for one or more products');
+        }
+
+        if (item.variationId) {
+          const updatedVariation = await tx.productVariation.updateMany({
+            where: {
+              id: item.variationId,
+              productId: item.productId,
+              isActive: true,
+              stock: { gte: item.quantity },
+            },
+            data: { stock: { decrement: item.quantity } },
+          });
+
+          if (updatedVariation.count === 0) {
+            throw new BadRequestException('Insufficient stock for selected variation');
+          }
         }
       }
 
@@ -292,6 +328,12 @@ export class OrdersService {
             where: { id: item.productId },
             data: { stock: { increment: item.quantity } },
           });
+          if (item.variationId) {
+            await tx.productVariation.update({
+              where: { id: item.variationId },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
         }
       }
 
@@ -354,6 +396,7 @@ export class OrdersService {
 
       return cart.cartItems.map((item) => ({
         productId: item.productId,
+        variationId: item.variationId,
         quantity: item.quantity,
       }));
     }
@@ -362,19 +405,19 @@ export class OrdersService {
   }
 
   private mergeItems(items: PurchaseItem[]): PurchaseItem[] {
-    const quantityByProduct = new Map<string, number>();
+    const quantityBySelection = new Map<string, PurchaseItem>();
 
     for (const item of items) {
-      quantityByProduct.set(
-        item.productId,
-        (quantityByProduct.get(item.productId) ?? 0) + item.quantity,
-      );
+      const key = `${item.productId}:${item.variationId ?? ''}`;
+      const current = quantityBySelection.get(key);
+      quantityBySelection.set(key, {
+        productId: item.productId,
+        variationId: item.variationId,
+        quantity: (current?.quantity ?? 0) + item.quantity,
+      });
     }
 
-    return [...quantityByProduct.entries()].map(([productId, quantity]) => ({
-      productId,
-      quantity,
-    }));
+    return [...quantityBySelection.values()];
   }
 
   private async consumeCoupon(
@@ -467,6 +510,7 @@ export class OrdersService {
       orderItems: order.orderItems.map((item) => ({
         id: item.id,
         productId: item.productId,
+        variationId: item.variationId,
         quantity: item.quantity,
         price: Number(item.price),
         createdAt: item.createdAt,

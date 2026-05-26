@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth-guard';
@@ -30,15 +40,20 @@ export class CartController {
   updateItem(
     @GetUser('id') userId: string,
     @Param('productId') productId: string,
+    @Query('variationId') variationId: string | undefined,
     @Body() dto: UpdateCartItemDto,
   ) {
-    return this.cartService.updateItem(userId, productId, dto);
+    return this.cartService.updateItem(userId, productId, variationId, dto);
   }
 
   @Delete('items/:productId')
   @ApiOperation({ summary: 'Remove a product from the open cart' })
-  removeItem(@GetUser('id') userId: string, @Param('productId') productId: string) {
-    return this.cartService.removeItem(userId, productId);
+  removeItem(
+    @GetUser('id') userId: string,
+    @Param('productId') productId: string,
+    @Query('variationId') variationId: string | undefined,
+  ) {
+    return this.cartService.removeItem(userId, productId, variationId);
   }
 
   @Delete('items')

@@ -11,6 +11,13 @@ const wishlistInclude = {
       productImages: {
         orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
       },
+      productVariations: {
+        include: {
+          options: {
+            include: { variant: true },
+          },
+        },
+      },
     },
   },
 } satisfies Prisma.WishlistItemInclude;
@@ -90,6 +97,18 @@ export class WishlistService {
                 logoUrl: item.product.brand.logoUrl,
               }
             : null,
+          variations: item.product.productVariations.map((variation) => ({
+            id: variation.id,
+            sku: variation.sku,
+            price: Number(variation.price),
+            stock: variation.stock,
+            isActive: variation.isActive,
+            options: variation.options.map((option) => ({
+              id: option.variant.id,
+              name: option.variant.name,
+              attributes: option.variant.attributes,
+            })),
+          })),
         },
       })),
       itemCount: items.length,
