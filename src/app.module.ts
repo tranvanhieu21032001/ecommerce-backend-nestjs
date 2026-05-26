@@ -23,6 +23,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { FlashSalesModule } from './modules/flash-sales/flash-sales.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { FlashSalesModule } from './modules/flash-sales/flash-sales.module';
     CartModule,
     WishlistModule,
     FlashSalesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

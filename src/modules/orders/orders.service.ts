@@ -26,11 +26,43 @@ type PurchaseItem = {
   flashSaleStockLimit?: number;
 };
 
+const orderInclude = {
+  orderItems: {
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          imageUrl: true,
+          productImages: {
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }],
+            take: 1,
+            select: { imageUrl: true },
+          },
+        },
+      },
+      variation: {
+        select: {
+          id: true,
+          options: {
+            include: {
+              variant: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  payment: true,
+} satisfies Prisma.OrderInclude;
+
 type OrderWithRelations = Prisma.OrderGetPayload<{
-  include: {
-    orderItems: true;
-    payment: true;
-  };
+  include: typeof orderInclude;
 }>;
 
 @Injectable()
@@ -190,7 +222,7 @@ export class OrdersService {
             },
           },
         },
-        include: this.orderInclude,
+        include: orderInclude,
       });
 
       if (createOrderDto.flashSaleReservationId) {
@@ -283,7 +315,7 @@ export class OrdersService {
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: this.orderInclude,
+        include: orderInclude,
       }),
     ]);
 
@@ -304,7 +336,7 @@ export class OrdersService {
         id,
         ...(role === Role.ADMIN ? {} : { userId }),
       },
-      include: this.orderInclude,
+      include: orderInclude,
     });
 
     if (!order) {
@@ -344,7 +376,7 @@ export class OrdersService {
           id,
           ...(actor && actor.role !== Role.ADMIN ? { userId: actor.userId } : {}),
         },
-        include: this.orderInclude,
+        include: orderInclude,
       });
 
       if (!order) {
@@ -409,7 +441,7 @@ export class OrdersService {
 
       const currentOrder = await tx.order.findUnique({
         where: { id },
-        include: this.orderInclude,
+        include: orderInclude,
       });
 
       if (!currentOrder) {
@@ -633,6 +665,20 @@ export class OrdersService {
         flashSaleItemId: item.flashSaleItemId,
         quantity: item.quantity,
         price: Number(item.price),
+        product: {
+          id: item.product.id,
+          name: item.product.name,
+          imageUrl: item.product.productImages[0]?.imageUrl ?? item.product.imageUrl,
+        },
+        variation: item.variation
+          ? {
+              id: item.variation.id,
+              options: item.variation.options.map((option) => ({
+                id: option.variant.id,
+                name: option.variant.name,
+              })),
+            }
+          : null,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       })),
@@ -664,9 +710,4 @@ export class OrdersService {
   private roundMoney(value: number): number {
     return Math.round(value * 100) / 100;
   }
-
-  private readonly orderInclude = {
-    orderItems: true,
-    payment: true,
-  } satisfies Prisma.OrderInclude;
 }

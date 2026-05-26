@@ -1,6 +1,14 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { DiscountType, PrismaClient, Role, UserStatus } from '@prisma/client';
+import {
+  DiscountType,
+  OrderStatus,
+  PaymentMethod,
+  PaymentStatus,
+  PrismaClient,
+  Role,
+  UserStatus,
+} from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const adapter = new PrismaPg({
@@ -330,6 +338,88 @@ const seedCoupons = [
   },
 ];
 
+const seedOrders = [
+  {
+    daysAgo: 28,
+    status: OrderStatus.DELIVERED,
+    paid: true,
+    items: [
+      [0, 1],
+      [2, 2],
+    ],
+  },
+  { daysAgo: 25, status: OrderStatus.DELIVERED, paid: true, items: [[15, 1]] },
+  {
+    daysAgo: 23,
+    status: OrderStatus.DELIVERED,
+    paid: true,
+    items: [
+      [1, 2],
+      [12, 1],
+    ],
+  },
+  { daysAgo: 20, status: OrderStatus.PROCESSING, paid: true, items: [[9, 3]] },
+  {
+    daysAgo: 18,
+    status: OrderStatus.DELIVERED,
+    paid: true,
+    items: [
+      [10, 1],
+      [3, 1],
+    ],
+  },
+  { daysAgo: 16, status: OrderStatus.DELIVERED, paid: true, items: [[16, 1]] },
+  { daysAgo: 14, status: OrderStatus.CANCELLED, paid: false, items: [[4, 1]] },
+  { daysAgo: 12, status: OrderStatus.DELIVERED, paid: true, items: [[0, 2]] },
+  {
+    daysAgo: 10,
+    status: OrderStatus.PROCESSING,
+    paid: true,
+    items: [
+      [15, 1],
+      [13, 1],
+    ],
+  },
+  {
+    daysAgo: 8,
+    status: OrderStatus.DELIVERED,
+    paid: true,
+    items: [
+      [8, 1],
+      [9, 2],
+    ],
+  },
+  {
+    daysAgo: 6,
+    status: OrderStatus.PROCESSING,
+    paid: true,
+    items: [
+      [1, 1],
+      [2, 2],
+    ],
+  },
+  { daysAgo: 4, status: OrderStatus.DELIVERED, paid: true, items: [[15, 2]] },
+  { daysAgo: 3, status: OrderStatus.PENDING, paid: false, items: [[11, 1]] },
+  {
+    daysAgo: 2,
+    status: OrderStatus.PROCESSING,
+    paid: true,
+    items: [
+      [0, 1],
+      [15, 1],
+    ],
+  },
+  {
+    daysAgo: 1,
+    status: OrderStatus.DELIVERED,
+    paid: true,
+    items: [
+      [13, 2],
+      [9, 1],
+    ],
+  },
+] as const;
+
 function generateSlug(value: string): string {
   return value
     .toLowerCase()
@@ -524,12 +614,140 @@ async function main() {
     });
   }
 
+  const [createdUsers, createdProducts] = await Promise.all([
+    prisma.user.findMany({
+      where: { email: { in: seedUsers.map((user) => user.email) } },
+      orderBy: { email: 'asc' },
+    }),
+    prisma.product.findMany({
+      where: { sku: { in: seedProducts.map((product) => product.sku) } },
+    }),
+  ]);
+  const productBySku = new Map(createdProducts.map((product) => [product.sku, product]));
+  const now = new Date();
+
+  for (const [index, seedOrder] of seedOrders.entries()) {
+    const customer = createdUsers[index % createdUsers.length];
+    if (!customer) {
+      throw new Error('Missing seeded user for dashboard orders');
+    }
+
+    const orderedItems = seedOrder.items.map(([productIndex, quantity]) => {
+      const seedProduct = seedProducts[productIndex];
+      const product = productBySku.get(seedProduct.sku);
+      if (!product) {
+        throw new Error(`Missing product ${seedProduct.sku} for dashboard orders`);
+      }
+
+      return {
+        productId: product.id,
+        quantity,
+        // Dashboard displays VND, so use stable VND snapshots for the demo revenue chart.
+        price: Math.round(seedProduct.price * 25000),
+      };
+    });
+    const totalAmount = orderedItems.reduce((total, item) => total + item.price * item.quantity, 0);
+    const createdAt = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() - seedOrder.daysAgo,
+        9 + (index % 8),
+        15,
+      ),
+    );
+    const paidAt = seedOrder.paid
+      ? new Date(createdAt.getTime() + (30 + index * 7) * 60 * 1000)
+      : null;
+    const orderNumber = `SEED-DASHBOARD-${String(index + 1).padStart(3, '0')}`;
+
+    const order = await prisma.order.upsert({
+      where: { orderNumber },
+      update: {
+        userId: customer.id,
+        status: seedOrder.status,
+        subtotal: totalAmount,
+        totalAmount,
+        shippingName: `${customer.firstName} ${customer.lastName}`,
+        shippingPhone: customer.phoneNumber,
+        shippingAddressLine1: `${index + 10} Nguyen Hue Street`,
+        shippingDistrict: 'District 1',
+        shippingCity: 'Ho Chi Minh City',
+        shippingCountry: 'VN',
+        notes: 'Seeded order for dashboard analytics',
+        createdAt,
+        cancelledAt: seedOrder.status === OrderStatus.CANCELLED ? createdAt : null,
+      },
+      create: {
+        orderNumber,
+        userId: customer.id,
+        status: seedOrder.status,
+        subtotal: totalAmount,
+        shippingFee: 0,
+        discountAmount: 0,
+        taxAmount: 0,
+        totalAmount,
+        shippingName: `${customer.firstName} ${customer.lastName}`,
+        shippingPhone: customer.phoneNumber,
+        shippingAddressLine1: `${index + 10} Nguyen Hue Street`,
+        shippingDistrict: 'District 1',
+        shippingCity: 'Ho Chi Minh City',
+        shippingCountry: 'VN',
+        notes: 'Seeded order for dashboard analytics',
+        createdAt,
+        cancelledAt: seedOrder.status === OrderStatus.CANCELLED ? createdAt : null,
+      },
+    });
+
+    await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+    await prisma.orderItem.createMany({
+      data: orderedItems.map((item) => ({
+        ...item,
+        orderId: order.id,
+        createdAt,
+      })),
+    });
+    await prisma.payment.upsert({
+      where: { orderId: order.id },
+      update: {
+        userId: customer.id,
+        amount: totalAmount,
+        method: PaymentMethod.BANK_TRANSFER,
+        currency: 'VND',
+        status: seedOrder.paid
+          ? PaymentStatus.COMPLETED
+          : seedOrder.status === OrderStatus.CANCELLED
+            ? PaymentStatus.FAILED
+            : PaymentStatus.PENDING,
+        transactionId: seedOrder.paid ? `SEED-TXN-${index + 1}` : null,
+        paidAt,
+        createdAt,
+      },
+      create: {
+        orderId: order.id,
+        userId: customer.id,
+        amount: totalAmount,
+        method: PaymentMethod.BANK_TRANSFER,
+        currency: 'VND',
+        status: seedOrder.paid
+          ? PaymentStatus.COMPLETED
+          : seedOrder.status === OrderStatus.CANCELLED
+            ? PaymentStatus.FAILED
+            : PaymentStatus.PENDING,
+        transactionId: seedOrder.paid ? `SEED-TXN-${index + 1}` : null,
+        paidAt,
+        createdAt,
+      },
+    });
+  }
+
   console.log(`Seeded ${categories.length} categories.`);
   console.log(`Seeded ${brands.length} brands.`);
   console.log(`Seeded ${tags.length} tags.`);
   console.log(`Seeded ${seedProducts.length} products.`);
   console.log(`Seeded ${seedCoupons.length} coupons.`);
   console.log(`Seeded ${seedUsers.length} users.`);
+  console.log(`Seeded ${seedOrders.length} dashboard orders with payment history.`);
 }
 
 main()

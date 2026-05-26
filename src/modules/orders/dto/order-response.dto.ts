@@ -1,6 +1,33 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 
+export class OrderItemProductResponseDto {
+  @ApiProperty({ description: 'Product ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  id: string;
+
+  @ApiProperty({ description: 'Product name', example: 'Wireless headphones' })
+  name: string;
+
+  @ApiProperty({ description: 'Product image URL', nullable: true, example: null })
+  imageUrl: string | null;
+}
+
+export class OrderItemVariationOptionResponseDto {
+  @ApiProperty({ description: 'Variant option ID' })
+  id: string;
+
+  @ApiProperty({ description: 'Variant option name', example: 'Black' })
+  name: string;
+}
+
+export class OrderItemVariationResponseDto {
+  @ApiProperty({ description: 'Selected product variation ID' })
+  id: string;
+
+  @ApiProperty({ type: [OrderItemVariationOptionResponseDto] })
+  options: OrderItemVariationOptionResponseDto[];
+}
+
 export class OrderItemResponseDto {
   @ApiProperty({
     description: 'Order item ID',
@@ -39,6 +66,12 @@ export class OrderItemResponseDto {
     example: 99.99,
   })
   price: number;
+
+  @ApiProperty({ type: OrderItemProductResponseDto })
+  product: OrderItemProductResponseDto;
+
+  @ApiProperty({ type: OrderItemVariationResponseDto, nullable: true })
+  variation: OrderItemVariationResponseDto | null;
 
   @ApiProperty({ description: 'Creation timestamp' })
   createdAt: Date;
