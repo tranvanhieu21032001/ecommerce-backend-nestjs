@@ -122,7 +122,7 @@ export class PaymentsService {
 
     const payment = await this.prisma.payment.findUnique({
       where: { payosOrderCode: BigInt(webhookData.orderCode) },
-      include: { order: true },
+      include: { order: { include: { orderItems: true } } },
     });
 
     // PayOS sends a test payload while confirming a webhook URL.
@@ -140,19 +140,31 @@ export class PaymentsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.payment.update({
-        where: { id: payment.id },
+      const completed = await tx.payment.updateMany({
+        where: { id: payment.id, status: PaymentStatus.PENDING },
         data: {
           status: PaymentStatus.COMPLETED,
           transactionId: webhookData.reference,
           paidAt: new Date(),
         },
       });
+      if (completed.count === 0) {
+        return;
+      }
 
       await tx.order.updateMany({
         where: { id: payment.orderId, status: OrderStatus.PENDING },
         data: { status: OrderStatus.PROCESSING },
       });
+
+      for (const item of payment.order.orderItems) {
+        if (item.flashSaleItemId) {
+          await tx.flashSaleItem.update({
+            where: { id: item.flashSaleItemId },
+            data: { revenue: { increment: item.price.mul(item.quantity) } },
+          });
+        }
+      }
     });
 
     return { success: true };

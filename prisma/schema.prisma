@@ -48,6 +48,13 @@ enum DiscountType {
   FIXED_AMOUNT
 }
 
+enum FlashSaleReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+  EXPIRED
+}
+
 model User {
   id              String     @id @default(uuid())
   email           String     @unique
@@ -67,6 +74,7 @@ model User {
   carts                   Cart[]
   wishlistItems           WishlistItem[]
   payments                Payment[]
+  flashSaleReservations   FlashSaleReservation[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -176,6 +184,7 @@ model Product {
   productTags       ProductTag[]
   productVariations ProductVariation[]
   productImages     ProductImage[]
+  flashSaleItems    FlashSaleItem[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   deletedAt         DateTime?
@@ -235,10 +244,11 @@ model ProductVariation {
   imageUrl  String?
   isActive  Boolean @default(true)
 
-  product    Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  options    ProductVariationOption[]
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  product        Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  options        ProductVariationOption[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  flashSaleItems FlashSaleItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -392,8 +402,9 @@ model Order {
   notes String?
 
   // Relations
-  orderItems OrderItem[]
-  payment    Payment?
+  orderItems           OrderItem[]
+  payment              Payment?
+  flashSaleReservation FlashSaleReservation?
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -417,6 +428,9 @@ model OrderItem {
   variationId String?
   variation   ProductVariation? @relation(fields: [variationId], references: [id])
 
+  flashSaleItemId String?
+  flashSaleItem   FlashSaleItem? @relation(fields: [flashSaleItemId], references: [id])
+
   orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -426,6 +440,7 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@index([variationId])
+  @@index([flashSaleItemId])
   @@map("order_items")
 }
 
@@ -488,4 +503,62 @@ model Coupon {
   @@index([startsAt])
   @@index([expiresAt])
   @@map("coupons")
+}
+
+model FlashSale {
+  id        String          @id @default(uuid())
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime
+  isActive  Boolean         @default(true)
+  items     FlashSaleItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+  @@map("flash_sales")
+}
+
+model FlashSaleItem {
+  id           String                 @id @default(uuid())
+  flashSaleId  String
+  flashSale    FlashSale              @relation(fields: [flashSaleId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product                @relation(fields: [productId], references: [id])
+  variationId  String?
+  variation    ProductVariation?      @relation(fields: [variationId], references: [id])
+  salePrice    Decimal                @db.Decimal(10, 2)
+  stockLimit   Int
+  perUserLimit Int                    @default(1)
+  soldCount    Int                    @default(0)
+  orderCount   Int                    @default(0)
+  revenue      Decimal                @default(0) @db.Decimal(12, 2)
+  reservations FlashSaleReservation[]
+  orderItems   OrderItem[]
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@index([flashSaleId])
+  @@index([productId])
+  @@index([variationId])
+  @@map("flash_sale_items")
+}
+
+model FlashSaleReservation {
+  id              String                     @id @default(uuid())
+  flashSaleItemId String
+  flashSaleItem   FlashSaleItem              @relation(fields: [flashSaleItemId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quantity        Int
+  status          FlashSaleReservationStatus @default(ACTIVE)
+  expiresAt       DateTime
+  orderId         String?                    @unique
+  order           Order?                     @relation(fields: [orderId], references: [id])
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@index([flashSaleItemId, status, expiresAt])
+  @@index([userId, status])
+  @@map("flash_sale_reservations")
 }

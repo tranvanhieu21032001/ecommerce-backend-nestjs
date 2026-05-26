@@ -22,6 +22,13 @@ export class OrderItemResponseDto {
   variationId: string | null;
 
   @ApiProperty({
+    description: 'Flash sale item used for the captured price',
+    nullable: true,
+    example: null,
+  })
+  flashSaleItemId: string | null;
+
+  @ApiProperty({
     description: 'Purchased quantity',
     example: 2,
   })

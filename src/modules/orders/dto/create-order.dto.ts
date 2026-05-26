@@ -43,7 +43,14 @@ export class CreateOrderItemDto {
 
 export class CreateOrderDto {
   @ApiPropertyOptional({
-    description: 'Cart ID to check out. Provide cartId or items when creating an order.',
+    description: 'Active flash sale reservation ID. Provide this instead of cartId or items.',
+  })
+  @IsString()
+  @IsOptional()
+  flashSaleReservationId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Cart ID to check out. Provide cartId, items, or flashSaleReservationId.',
     example: '550e8400-e29b-41d4-a716-446655440001',
   })
   @IsString()

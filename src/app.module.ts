@@ -22,6 +22,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { FlashSalesModule } from './modules/flash-sales/flash-sales.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module';
     PaymentsModule,
     CartModule,
     WishlistModule,
+    FlashSalesModule,
   ],
   controllers: [AppController],
   providers: [

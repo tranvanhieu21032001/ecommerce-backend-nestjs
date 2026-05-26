@@ -7,6 +7,7 @@ import {
   PaymentStatus,
   Prisma,
   Role,
+  FlashSaleReservationStatus,
 } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -14,11 +15,15 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { FlashSalesService } from '../flash-sales/flash-sales.service';
 
 type PurchaseItem = {
   productId: string;
   variationId?: string | null;
   quantity: number;
+  salePrice?: Prisma.Decimal;
+  flashSaleItemId?: string;
+  flashSaleStockLimit?: number;
 };
 
 type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -33,11 +38,19 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paymentsService: PaymentsService,
+    private readonly flashSalesService: FlashSalesService,
   ) {}
 
   async create(userId: string, createOrderDto: CreateOrderDto): Promise<OrderResponseDto> {
-    if (Boolean(createOrderDto.cartId) === Boolean(createOrderDto.items?.length)) {
-      throw new BadRequestException('Provide either cartId or items to create an order');
+    const sources = [
+      Boolean(createOrderDto.cartId),
+      Boolean(createOrderDto.items?.length),
+      Boolean(createOrderDto.flashSaleReservationId),
+    ].filter(Boolean).length;
+    if (sources !== 1) {
+      throw new BadRequestException(
+        'Provide exactly one of cartId, items, or flashSaleReservationId',
+      );
     }
 
     const order = await this.prisma.$transaction(async (tx) => {
@@ -84,8 +97,9 @@ export class OrdersService {
         return {
           productId: item.productId,
           variationId: variation?.id,
+          flashSaleItemId: item.flashSaleItemId,
           quantity: item.quantity,
-          price: variation?.price ?? product.price,
+          price: item.salePrice ?? variation?.price ?? product.price,
         };
       });
 
@@ -145,7 +159,7 @@ export class OrdersService {
         }
       }
 
-      return tx.order.create({
+      const createdOrder = await tx.order.create({
         data: {
           userId,
           cartId: createOrderDto.cartId,
@@ -178,8 +192,48 @@ export class OrdersService {
         },
         include: this.orderInclude,
       });
+
+      if (createOrderDto.flashSaleReservationId) {
+        const flashItem = items[0];
+        const consumed = await tx.flashSaleReservation.updateMany({
+          where: {
+            id: createOrderDto.flashSaleReservationId,
+            userId,
+            status: FlashSaleReservationStatus.ACTIVE,
+            expiresAt: { gt: new Date() },
+          },
+          data: {
+            status: FlashSaleReservationStatus.CONSUMED,
+            orderId: createdOrder.id,
+          },
+        });
+        if (consumed.count === 0 || !flashItem.flashSaleItemId) {
+          throw new BadRequestException('Flash sale reservation is no longer available');
+        }
+        const sold = await tx.flashSaleItem.updateMany({
+          where: {
+            id: flashItem.flashSaleItemId,
+            soldCount: { lte: (flashItem.flashSaleStockLimit ?? 0) - flashItem.quantity },
+          },
+          data: {
+            soldCount: { increment: flashItem.quantity },
+            orderCount: { increment: 1 },
+          },
+        });
+        if (sold.count === 0) {
+          throw new BadRequestException('Flash sale item is unavailable');
+        }
+      }
+
+      return createdOrder;
     });
 
+    if (createOrderDto.flashSaleReservationId && order.orderItems[0]?.flashSaleItemId) {
+      await this.flashSalesService.consumeReservation(
+        order.orderItems[0].flashSaleItemId,
+        createOrderDto.flashSaleReservationId,
+      );
+    }
     return this.formatOrder(order);
   }
 
@@ -284,7 +338,7 @@ export class OrdersService {
     nextStatus: OrderStatus,
     actor?: { userId: string; role: Role },
   ): Promise<OrderResponseDto> {
-    const updatedOrder = await this.prisma.$transaction(async (tx) => {
+    const { updatedOrder, restoredFlashItems } = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: {
           id,
@@ -300,7 +354,7 @@ export class OrdersService {
         throw new BadRequestException('Customers can only cancel an order');
       }
       if (order.status === nextStatus) {
-        return order;
+        return { updatedOrder: order, restoredFlashItems: [] };
       }
 
       this.ensureStatusTransition(order.status, nextStatus, Boolean(actor));
@@ -334,7 +388,23 @@ export class OrdersService {
               data: { stock: { increment: item.quantity } },
             });
           }
+          if (item.flashSaleItemId) {
+            await tx.flashSaleItem.update({
+              where: { id: item.flashSaleItemId },
+              data: {
+                soldCount: { decrement: item.quantity },
+                orderCount: { decrement: 1 },
+                ...(order.payment?.status === PaymentStatus.COMPLETED
+                  ? { revenue: { decrement: item.price.mul(item.quantity) } }
+                  : {}),
+              },
+            });
+          }
         }
+        await tx.flashSaleReservation.updateMany({
+          where: { orderId: order.id, status: FlashSaleReservationStatus.CONSUMED },
+          data: { status: FlashSaleReservationStatus.RELEASED },
+        });
       }
 
       const currentOrder = await tx.order.findUnique({
@@ -346,9 +416,26 @@ export class OrdersService {
         throw new NotFoundException('Order not found');
       }
 
-      return currentOrder;
+      return {
+        updatedOrder: currentOrder,
+        restoredFlashItems:
+          nextStatus === OrderStatus.CANCELLED
+            ? currentOrder.orderItems
+                .filter((item) => item.flashSaleItemId)
+                .map((item) => ({
+                  itemId: item.flashSaleItemId!,
+                  quantity: item.quantity,
+                  userId: currentOrder.userId,
+                }))
+            : [],
+      };
     });
 
+    await Promise.all(
+      restoredFlashItems.map((item) =>
+        this.flashSalesService.restorePurchasedStock(item.itemId, item.userId, item.quantity),
+      ),
+    );
     return this.formatOrder(updatedOrder);
   }
 
@@ -381,6 +468,38 @@ export class OrdersService {
     userId: string,
     createOrderDto: CreateOrderDto,
   ): Promise<PurchaseItem[]> {
+    if (createOrderDto.flashSaleReservationId) {
+      const reservation = await tx.flashSaleReservation.findFirst({
+        where: {
+          id: createOrderDto.flashSaleReservationId,
+          userId,
+          status: FlashSaleReservationStatus.ACTIVE,
+          expiresAt: { gt: new Date() },
+          flashSaleItem: {
+            flashSale: {
+              isActive: true,
+              startsAt: { lte: new Date() },
+              endsAt: { gt: new Date() },
+            },
+          },
+        },
+        include: { flashSaleItem: true },
+      });
+      if (!reservation) {
+        throw new BadRequestException('Flash sale reservation is expired or unavailable');
+      }
+      return [
+        {
+          productId: reservation.flashSaleItem.productId,
+          variationId: reservation.flashSaleItem.variationId,
+          quantity: reservation.quantity,
+          salePrice: reservation.flashSaleItem.salePrice,
+          flashSaleItemId: reservation.flashSaleItemId,
+          flashSaleStockLimit: reservation.flashSaleItem.stockLimit,
+        },
+      ];
+    }
+
     if (createOrderDto.cartId) {
       const cart = await tx.cart.findFirst({
         where: { id: createOrderDto.cartId, userId, checkedOut: false },
@@ -511,6 +630,7 @@ export class OrdersService {
         id: item.id,
         productId: item.productId,
         variationId: item.variationId,
+        flashSaleItemId: item.flashSaleItemId,
         quantity: item.quantity,
         price: Number(item.price),
         createdAt: item.createdAt,
