@@ -16,6 +16,7 @@ import { AuthResponseDto } from './dto/auth-response.dto';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { JwtRefreshAuthGuard } from 'src/common/guards/jwt-refresh-auth.guard';
 import { GetUser } from 'src/common/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth-guard';
@@ -139,6 +140,33 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<Omit<AuthResponseDto, 'accessToken' | 'refreshToken'>> {
     const result = await this.authService.login(loginDto);
+    this.setAuthCookies(res, result.accessToken!, result.refreshToken!);
+    return {
+      status: result.status,
+      message: result.message,
+      user: result.user,
+    };
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Login or register with Google',
+    description: 'Verifies a Google ID token and creates an authenticated session',
+  })
+  @ApiBody({
+    type: GoogleLoginDto,
+  })
+  @ApiResponse({ status: 200, description: 'Google sign-in successful', type: AuthResponseDto })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized. Invalid Google credential',
+  })
+  async googleLogin(
+    @Body() googleLoginDto: GoogleLoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Omit<AuthResponseDto, 'accessToken' | 'refreshToken'>> {
+    const result = await this.authService.loginWithGoogle(googleLoginDto);
     this.setAuthCookies(res, result.accessToken!, result.refreshToken!);
     return {
       status: result.status,

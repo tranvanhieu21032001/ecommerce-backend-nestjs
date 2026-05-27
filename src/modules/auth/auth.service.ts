@@ -16,6 +16,8 @@ import { ConfigService } from '@nestjs/config';
 import { MailsService } from 'src/common/mails/mails.service';
 import { LoginDto } from './dto/login.dto';
 import { LogoutDto } from './dto/logout.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
+import { OAuth2Client } from 'google-auth-library';
 
 type RefreshAuthUser = {
   id: string;
@@ -25,6 +27,8 @@ type RefreshAuthUser = {
 
 @Injectable()
 export class AuthService {
+  private readonly googleClient = new OAuth2Client();
+
   constructor(
     private prismaService: PrismaService,
     private jwtService: JwtService,
@@ -153,6 +157,90 @@ export class AuthService {
       status: true,
       message: 'Login successful',
       user: safeUser,
+      ...tokens,
+    };
+  }
+
+  async loginWithGoogle(googleLoginDto: GoogleLoginDto): Promise<AuthResponseDto> {
+    const googleClientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!googleClientId) {
+      throw new InternalServerErrorException('Google sign-in is not configured');
+    }
+
+    let payload;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: googleLoginDto.credential,
+        audience: googleClientId,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('Invalid Google credential');
+    }
+
+    if (!payload?.sub || !payload.email || payload.email_verified !== true) {
+      throw new UnauthorizedException('Google account email is not verified');
+    }
+
+    const email = payload.email.trim().toLowerCase();
+    const now = new Date();
+    const userByGoogleId = await this.prismaService.user.findUnique({
+      where: { googleId: payload.sub },
+    });
+
+    let user = userByGoogleId;
+    if (!user) {
+      const userByEmail = await this.prismaService.user.findFirst({
+        where: {
+          email: {
+            equals: email,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (userByEmail?.googleId && userByEmail.googleId !== payload.sub) {
+        throw new ConflictException('This email is already linked to another Google account');
+      }
+
+      if (userByEmail) {
+        user = await this.prismaService.user.update({
+          where: { id: userByEmail.id },
+          data: {
+            googleId: payload.sub,
+            emailVerifiedAt: userByEmail.emailVerifiedAt ?? now,
+          },
+        });
+      } else {
+        const password = await argon2.hash(randomBytes(32).toString('hex'));
+        user = await this.prismaService.user.create({
+          data: {
+            email,
+            googleId: payload.sub,
+            password,
+            firstName: payload.given_name?.trim() || null,
+            lastName: payload.family_name?.trim() || null,
+            emailVerifiedAt: now,
+          },
+        });
+      }
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    return {
+      status: true,
+      message: 'Google sign-in successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        birthday: user.birthday,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+      },
       ...tokens,
     };
   }

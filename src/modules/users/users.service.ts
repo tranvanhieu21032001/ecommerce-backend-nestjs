@@ -76,6 +76,17 @@ export class UsersService {
       }
     }
 
+    if (updateUserDto.phoneNumber && updateUserDto.phoneNumber !== existingUser.phoneNumber) {
+      const existingPhone = await this.prismaService.user.findUnique({
+        where: { phoneNumber: updateUserDto.phoneNumber },
+        select: { id: true },
+      });
+
+      if (existingPhone) {
+        throw new ConflictException('Phone number already in use');
+      }
+    }
+
     try {
       return await this.prismaService.user.update({
         where: { id: userId },
@@ -83,6 +94,8 @@ export class UsersService {
           email: updateUserDto.email,
           firstName: updateUserDto.firstName,
           lastName: updateUserDto.lastName,
+          phoneNumber: updateUserDto.phoneNumber,
+          birthday: updateUserDto.birthday,
         },
         select: {
           id: true,
@@ -98,7 +111,7 @@ export class UsersService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('User already exists');
+        throw new ConflictException('Email or phone number already in use');
       }
       throw error;
     }

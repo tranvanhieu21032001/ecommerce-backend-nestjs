@@ -39,7 +39,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
           {
             name: 'short',
             ttl: 1000,
-            limit: 5,
+            limit: 10,
           },
           {
             name: 'medium',

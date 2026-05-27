@@ -49,6 +49,20 @@ This project follows the **Conventional Commits** standard. Please use the follo
 - **Devtools:** [NestJS Devtools](https://devtools.nestjs.com)
 - **Support:** [Discord Community](https://discord.gg/G7Qnnhy)
 
+## Google Sign-In
+
+Create a Google OAuth 2.0 Web client and set the client ID in `.env`:
+
+```env
+GOOGLE_CLIENT_ID=your_google_web_client_id
+```
+
+The frontend must expose the same value as `NEXT_PUBLIC_GOOGLE_CLIENT_ID`. Apply the user identity migration before accepting Google sign-ins:
+
+```bash
+npx prisma migrate deploy
+```
+
 ## PayOS VietQR Payments
 
 Set the PayOS credentials in `.env` before using VietQR payment endpoints:

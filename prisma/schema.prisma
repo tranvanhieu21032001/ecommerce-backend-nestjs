@@ -58,6 +58,7 @@ enum FlashSaleReservationStatus {
 model User {
   id              String     @id @default(uuid())
   email           String     @unique
+  googleId        String?    @unique
   phoneNumber     String?    @unique
   password        String
   firstName       String?
