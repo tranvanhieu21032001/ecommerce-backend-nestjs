@@ -258,7 +258,7 @@ export class AuthController {
     status: 401,
     description: 'Unauthorized',
   })
-  async me(
+  me(
     @GetUser()
     user: {
       id: string;
